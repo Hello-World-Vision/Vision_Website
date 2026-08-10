@@ -28,10 +28,12 @@ const members = published(await getCollection('members'));
 // 算法卡片可取的封面图（若有）
 const algoCover = algorithms.find((a) => a.data.cover)?.data.cover?.src;
 
+const base = import.meta.env.BASE_URL;
+
 // 三个入口卡片的数据源
 const sections = [
   {
-    href: '/docs',
+    href: `${base}docs`,
     icon: 'mdi:book-open-variant',
     title: '算法库',
     subtitle: 'ALGORITHMS',
@@ -40,7 +42,7 @@ const sections = [
     bgImage: algoCover,
   },
   {
-    href: '/docs',
+    href: `${base}docs`,
     icon: 'mdi:code-tags',
     title: '开源项目',
     subtitle: 'OPEN SOURCE',
@@ -49,7 +51,7 @@ const sections = [
     bgImage: undefined,
   },
   {
-    href: '/members',
+    href: `${base}members`,
     icon: 'mdi:account-group',
     title: '团队成员',
     subtitle: 'THE CREW',
@@ -91,14 +93,14 @@ const sections = [
 
       <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
         <a
-          href="/docs"
+          href={`${base}docs`}
           class="group inline-flex items-center gap-2 rounded-full bg-zju-800 px-7 py-3 text-sm font-semibold text-white shadow-glow-zju transition-all hover:bg-zju-700 hover:shadow-glow-zju-lg"
         >
           浏览算法库
           <Icon name="mdi:arrow-right" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
         </a>
         <a
-          href="/members"
+          href={`${base}members`}
           class="inline-flex items-center gap-2 rounded-full border border-zinc-500 px-7 py-3 text-sm font-semibold text-zinc-200 transition-all hover:border-sky-400 hover:text-sky-300"
         >
           认识团队

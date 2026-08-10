@@ -6,6 +6,7 @@
 import { Icon } from 'astro-icon/components';
 
 const year = new Date().getFullYear();
+const base = import.meta.env.BASE_URL;
 ---
 
 <footer class="relative z-10 border-t border-zinc-200 dark:border-zinc-800">
@@ -31,10 +32,10 @@ const year = new Date().getFullYear();
       >
         <Icon name="mdi:play-box-multiple-outline" class="h-5 w-5" />
       </a>
-      <a href="/docs" class="text-sm text-zinc-500 transition-colors hover:text-zju-400">
+      <a href={`${base}docs`} class="text-sm text-zinc-500 transition-colors hover:text-zju-400">
         文档
       </a>
-      <a href="/members" class="text-sm text-zinc-500 transition-colors hover:text-zju-400">
+      <a href={`${base}members`} class="text-sm text-zinc-500 transition-colors hover:text-zju-400">
         团队成员
       </a>
     </div>

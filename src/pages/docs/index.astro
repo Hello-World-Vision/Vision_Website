@@ -49,6 +49,8 @@ const groups: { label: string; folder: string; icon: string; items: DocEntry[] }
 
 const fmtDate = (d: Date) =>
   new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <BaseLayout title="文档" description="浙江大学视觉组文档中心 —— 算法教程与开源项目。">
@@ -89,7 +91,7 @@ const fmtDate = (d: Date) =>
               {group.items.map((item) => (
                 <li>
                   <a
-                    href={`/docs/${item.collection}/${item.id}`}
+                    href={`${base}docs/${item.collection}/${item.id}`}
                     class="tech-card block p-5"
                   >
                     <div class="flex items-start justify-between gap-3">

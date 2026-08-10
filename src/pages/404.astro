@@ -2,6 +2,8 @@
 // 404 页面
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { Icon } from 'astro-icon/components';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <BaseLayout title="页面不存在" description="页面不存在。">
@@ -13,7 +15,7 @@ import { Icon } from 'astro-icon/components';
       <h1 class="mt-6 text-3xl font-bold">信号丢失 · SIGNAL LOST</h1>
       <p class="mt-3 text-zinc-500">你要找的页面不存在，或者已被移动。</p>
       <a
-        href="/"
+        href={base}
         class="mt-8 inline-flex items-center gap-2 rounded-full bg-zju-800 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-zju-700"
       >
         <Icon name="mdi:home" class="h-4 w-4" />

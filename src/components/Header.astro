@@ -17,10 +17,12 @@ interface NavItem {
   exact?: boolean;
 }
 
+const base = import.meta.env.BASE_URL;
+
 const navItems: NavItem[] = [
-  { label: '首页', href: '/', exact: true },
-  { label: '文档', href: '/docs' },
-  { label: '团队', href: '/members' },
+  { label: '首页', href: base, exact: true },
+  { label: '文档', href: `${base}docs` },
+  { label: '团队', href: `${base}members` },
 ];
 
 // 判断激活态：非 exact 的导航项，其 href 是当前路径的前缀时也视为激活
@@ -33,7 +35,7 @@ const isActive = (item: NavItem) =>
 >
   <div class="container-page flex h-16 items-center justify-between">
     <!-- 左侧 Logo -->
-    <a href="/" class="group flex items-center gap-2.5">
+    <a href={base} class="group flex items-center gap-2.5">
       <span
         class="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-zju-500 to-zju-900 font-mono text-sm font-bold text-white shadow-glow-zju"
       >

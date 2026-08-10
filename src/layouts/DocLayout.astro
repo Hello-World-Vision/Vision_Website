@@ -51,6 +51,8 @@ const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 4);
 const formattedDate = date
   ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
   : '';
+
+const base = import.meta.env.BASE_URL;
 ---
 
 <BaseLayout title={title} description={description}>
@@ -135,7 +137,7 @@ const formattedDate = date
   <!-- 返回列表按钮 -->
   <div class="container-page pb-16">
     <a
-      href="/docs"
+      href={`${base}docs`}
       class="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium transition-colors hover:border-zju-400 hover:text-zju-400 dark:border-zinc-700"
     >
       <Icon name="mdi:arrow-left" class="h-4 w-4" />
