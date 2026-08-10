@@ -13,6 +13,9 @@ import { Icon } from 'astro-icon/components';
 import ParticleCanvas from '../components/ParticleCanvas.astro';
 import teamLogo from '../assets/team-logo.png';
 import zjuLogo from '../assets/zju-logo.png';
+import cardDji from '../assets/card-dji.png';
+import cardRm from '../assets/card-rm.png';
+import cardGithub from '../assets/card-github.png';
 
 const base = import.meta.env.BASE_URL;
 
@@ -22,18 +25,21 @@ const cards = [
     icon: 'mdi:school',
     title: 'Induction Training',
     description: '新人入组必修课：视觉自瞄与工程实践全链路教程。',
+    bgImage: cardDji.src,
   },
   {
     href: `${base}about`,
     icon: 'mdi:account-group',
     title: 'About',
     description: '认识 ZJU RoboMaster 视觉组的每一位队员。',
+    bgImage: cardRm.src,
   },
   {
     href: `${base}project`,
     icon: 'mdi:rocket-launch',
     title: 'Project',
     description: '沉淀并开源的所有项目与代码仓库。',
+    bgImage: cardGithub.src,
   },
 ];
 ---
@@ -101,17 +107,27 @@ const cards = [
         {cards.map((card) => (
           <a
             href={card.href}
-            class="group relative flex min-h-[12rem] flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 text-center backdrop-blur-md transition-all duration-300 hover:scale-105 hover:border-sky-400/60 hover:bg-white/10 hover:shadow-[0_0_30px_rgba(56,189,248,0.18)] sm:p-6"
+            class="group relative min-h-[12rem] overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md transition-all duration-300 hover:scale-105 hover:border-sky-400/60 hover:bg-white/10 hover:shadow-[0_0_30px_rgba(56,189,248,0.18)]"
           >
-            <span class="grid h-10 w-10 place-items-center rounded-xl bg-sky-400/10 text-sky-400 transition-transform duration-300 group-hover:scale-110">
-              <Icon name={card.icon} class="h-5 w-5" />
-            </span>
-            <span class="font-mono text-xs font-semibold tracking-wide text-zinc-200 transition-colors duration-300 group-hover:text-white sm:text-sm">
-              {card.title}
-            </span>
-            <span class="hidden text-xs leading-5 text-zinc-500 transition-colors duration-300 group-hover:text-zinc-300 md:block">
-              {card.description}
-            </span>
+            <!-- 第一层：背景图片层（hover 时缓慢放大） -->
+            <div
+              class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110"
+              style={{ backgroundImage: `url('${card.bgImage}')` }}
+            ></div>
+            <!-- 第二层：暗黑遮罩层（hover 时提亮） -->
+            <div class="absolute inset-0 bg-black/65 transition-colors duration-500 group-hover:bg-black/40"></div>
+            <!-- 第三层：内容层 -->
+            <div class="relative z-10 flex min-h-[12rem] flex-col items-center justify-center gap-2 p-4 text-center sm:p-6">
+              <span class="grid h-10 w-10 place-items-center rounded-xl bg-sky-400/10 text-sky-400 transition-transform duration-300 group-hover:scale-110">
+                <Icon name={card.icon} class="h-5 w-5" />
+              </span>
+              <span class="font-mono text-xs font-semibold tracking-wide text-zinc-200 transition-colors duration-300 group-hover:text-white sm:text-sm">
+                {card.title}
+              </span>
+              <span class="hidden text-xs leading-5 text-zinc-500 transition-colors duration-300 group-hover:text-zinc-300 md:block">
+                {card.description}
+              </span>
+            </div>
           </a>
         ))}
       </div>
