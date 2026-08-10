@@ -31,7 +31,13 @@ interface Props {
   Content: any;
   /** 标题树，用于生成目录 */
   headings?: Heading[];
+  /** 返回列表按钮链接（默认 /docs） */
+  backHref?: string;
+  /** 返回列表按钮文案（默认"返回全部文档"） */
+  backLabel?: string;
 }
+
+const base = import.meta.env.BASE_URL;
 
 const {
   title,
@@ -43,6 +49,8 @@ const {
   collectionLabel,
   Content,
   headings = [],
+  backHref = `${base}docs`,
+  backLabel = '返回全部文档',
 } = Astro.props;
 
 // 取深度 2~4 的标题作为目录项
@@ -51,8 +59,6 @@ const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 4);
 const formattedDate = date
   ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
   : '';
-
-const base = import.meta.env.BASE_URL;
 ---
 
 <BaseLayout title={title} description={description}>
@@ -137,11 +143,11 @@ const base = import.meta.env.BASE_URL;
   <!-- 返回列表按钮 -->
   <div class="container-page pb-16">
     <a
-      href={`${base}docs`}
+      href={backHref}
       class="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium transition-colors hover:border-zju-400 hover:text-zju-400 dark:border-zinc-700"
     >
       <Icon name="mdi:arrow-left" class="h-4 w-4" />
-      返回全部文档
+      {backLabel}
     </a>
   </div>
 </BaseLayout>

@@ -138,5 +138,28 @@ const pages = defineCollection({
   }),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 5) 入组培训文档集合
+//    src/content/induction/ 下的每个 .md 文件 = 一篇培训文档。
+//    列表页：/induction-training  文章页：/induction-training/<文件名>
+// ─────────────────────────────────────────────────────────────────────────────
+const induction = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/induction' }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    author: z.string().default('ZJU Vision Group'),
+    date: z.coerce.date(),
+    tags: z.array(z.string()).default([]),
+    draft: z.boolean().default(false),
+  }),
+});
+
 // 注册所有集合 —— 集合 key 必须与 src/content/ 下的文件夹名一致
-export const collections = { algorithms, 'open-source': openSource, members, pages };
+export const collections = {
+  algorithms,
+  'open-source': openSource,
+  members,
+  pages,
+  induction,
+};
