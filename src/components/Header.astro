@@ -10,7 +10,6 @@
 // 新增导航入口：在 navItems 数组里加一项即可。
 // =============================================================================
 import { Icon } from 'astro-icon/components';
-import ThemeToggle from './ThemeToggle.astro';
 
 interface NavItem {
   label: string;
@@ -70,9 +69,9 @@ const isActive = (item: NavItem) =>
 
       <span class="mx-1 hidden h-4 w-px bg-zinc-700 sm:block"></span>
 
-      <!-- 外部链接：GitHub -->
+      <!-- 外部链接：GitHub 组织仓库 -->
       <a
-        href="https://github.com/ZJU-Vision"
+        href="https://github.com/Hello-World-Vision"
         target="_blank"
         rel="noopener noreferrer"
         title="GitHub"
@@ -80,9 +79,6 @@ const isActive = (item: NavItem) =>
       >
         <Icon name="mdi:github" class="h-5 w-5" />
       </a>
-
-      <!-- 深浅色切换 -->
-      <ThemeToggle />
     </nav>
   </div>
 </header>
