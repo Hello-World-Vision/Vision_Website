@@ -27,13 +27,14 @@ interface Props {
 }
 
 const {
-  title = 'ZJU Vision Group',
-  description = '浙江大学视觉组（ZJU Vision Group）官方站点 —— 用视觉重新定义战场。',
+  title = '浙江大学 RoboMaster Vision',
+  description = '浙江大学 RoboMaster 视觉组 —— 用视觉重新定义战场。',
   hideFooter = false,
   singleScreen = false,
 } = Astro.props;
 
-const pageTitle = title === 'ZJU Vision Group' ? title : `${title} · ZJU Vision Group`;
+const pageTitle =
+  title === '浙江大学 RoboMaster Vision' ? title : `${title} · 浙江大学 RoboMaster Vision`;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 ---
 
