@@ -5,7 +5,7 @@ author: "视觉组"
 date: 2026-08-10
 tags: ["Kalman", "滤波"]
 status: done
-draft: true
+draft: false
 ---
 
 # 学卡尔曼滤波之前，你需要学习线性代数
