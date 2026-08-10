@@ -23,4 +23,6 @@ draft: true
 【【卡尔曼滤波器】1_递归算法_Recursive Processing】 https://www.bilibili.com/video/BV1ez4y1X7eR/?share_source=copy_web&vd_source=1af1d715be39a4e3dd942d659c9846f6
 
 强烈建议手推一遍公式！
+
+视频最后章节会涉及扩展卡尔曼滤波（EKF），是之后自瞄会用到的算法，也强烈建议学会
 <!-- 占位文档：待编写 -->
