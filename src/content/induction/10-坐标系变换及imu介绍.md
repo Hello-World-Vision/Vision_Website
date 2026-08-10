@@ -4,7 +4,7 @@ description: "相机成像模型与坐标系变换基础，以及 IMU 的简单�
 author: "视觉组"
 date: 2026-08-10
 tags: ["坐标系", "相机", "IMU", "标定"]
-status: todo
+status: done
 draft: false
 ---
 
