@@ -44,12 +44,12 @@ const cards = [
 ];
 ---
 
-<BaseLayout>
+<BaseLayout singleScreen>
   <!-- ============================================================
        HERO 首屏（单屏，无滚动条）
        高度 = 100vh - 4rem（Header 占 4rem），内部自行分配空间
        ============================================================ -->
-  <section class="relative h-[calc(100vh-4rem)] overflow-hidden">
+  <section class="relative h-full overflow-hidden">
     <!-- 预留的 Canvas / 3D 渲染容器 -->
     <div id="hero-canvas-container" class="absolute inset-0 z-0">
       <!-- 科技网格光层 -->
@@ -103,7 +103,7 @@ const cards = [
       </div>
 
       <!-- ── 底部：三张入口卡片（max-w-[68rem] 稍收窄） ── -->
-      <div class="mx-auto grid w-full max-w-[68rem] grid-cols-3 gap-6 px-6 pb-8 sm:px-8 sm:gap-8">
+      <div class="mx-auto grid w-full max-w-[68rem] grid-cols-3 gap-6 px-6 sm:px-8 sm:gap-8">
         {cards.map((card) => (
           <a
             href={card.href}

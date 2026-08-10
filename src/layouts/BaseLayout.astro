@@ -22,12 +22,15 @@ interface Props {
   description?: string;
   /** 是否隐藏页脚（如全屏沉浸式页面可用） */
   hideFooter?: boolean;
+  /** 单屏模式：锁死 100vh，不允许滚动，Header/主体/Footer 刚好适配一屏 */
+  singleScreen?: boolean;
 }
 
 const {
   title = 'ZJU Vision Group',
   description = '浙江大学视觉组（ZJU Vision Group）官方站点 —— 用视觉重新定义战场。',
   hideFooter = false,
+  singleScreen = false,
 } = Astro.props;
 
 const pageTitle = title === 'ZJU Vision Group' ? title : `${title} · ZJU Vision Group`;
@@ -61,7 +64,12 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     </script>
   </head>
 
-  <body class="relative min-h-screen overflow-x-hidden">
+  <body
+    class:list={[
+      'relative min-h-screen overflow-x-hidden',
+      singleScreen && 'flex flex-col overflow-hidden',
+    ]}
+  >
     <!--
       全站固定背景层：三团"求是蓝/科技蓝"光晕 + 淡网格，营造空间纵深感。
       它永远在最底层（z-0），具体页面内容放在 z-10 之上即可。
@@ -86,7 +94,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <Header />
 
     <!-- 页面主体：子页面内容渲染位置 -->
-    <main class="relative z-10">
+    <main class:list={['relative z-10', singleScreen && 'flex flex-1 flex-col']}>
       <slot />
     </main>
 
