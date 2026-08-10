@@ -12,6 +12,7 @@ import { Image } from 'astro:assets';
 import { Icon } from 'astro-icon/components';
 import ParticleCanvas from '../components/ParticleCanvas.astro';
 import teamLogo from '../assets/team-logo.png';
+import zjuLogo from '../assets/zju-logo.png';
 
 const base = import.meta.env.BASE_URL;
 
@@ -73,18 +74,23 @@ const cards = [
           </p>
         </div>
 
-        <!-- 右：Hello World 队徽（悬浮呼吸动画 + 辉光融合） -->
+        <!-- 右：校徽 + 队徽 双 Logo 并排（悬浮呼吸动画 + 辉光融合） -->
         <div class="relative shrink-0">
-          <div class="hero-logo relative flex items-center justify-center">
-            <!-- 背后的辉光（随队徽一起浮动，mix-blend-screen 会与其融合） -->
+          <div class="hero-logo relative flex flex-row items-center justify-center gap-8 md:gap-12">
+            <!-- 背后的辉光（随 Logo 一起浮动，mix-blend-screen 会与其融合） -->
             <div
               aria-hidden="true"
               class="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/20 blur-[80px]"
             ></div>
             <Image
+              src={zjuLogo}
+              alt="浙江大学校徽"
+              class="relative invert brightness-200 mix-blend-screen w-40 animate-pulse object-contain transition-transform duration-300 hover:scale-105 md:w-48 lg:w-56"
+            />
+            <Image
               src={teamLogo}
               alt="Hello World 队徽"
-              class="relative invert mix-blend-screen h-52 w-52 object-contain md:h-72 md:w-72 lg:h-80 lg:w-80"
+              class="relative invert brightness-200 mix-blend-screen w-40 animate-pulse object-contain transition-transform duration-300 hover:scale-105 md:w-48 lg:w-56"
             />
           </div>
         </div>
