@@ -1,19 +1,26 @@
 ---
 // =============================================================================
 // 入组培训总览页 src/pages/induction-training/index.astro（路由：/induction-training）
-// 自动列出 src/content/induction/ 下的全部培训文档，按日期倒序排列。
+// 结构：
+//   1. 学习路线（Roadmap）：按文件名顺序展示全部文档，已完成可点击，待完成置灰
+//   2. 待完成文档（Todo）：列出 status: todo 的占位文档
+//   3. 文档列表：已发布的全部文档卡片
 // 新增文档 = 在 src/content/induction/ 下新建 .md 文件即可，此处自动出现。
 // =============================================================================
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { Icon } from 'astro-icon/components';
 import { getCollection } from 'astro:content';
 
-const published = <T extends { data: { draft?: boolean } }>(entries: T[]): T[] =>
-  entries.filter((e) => !e.data.draft);
-
-const docs = published(await getCollection('induction')).sort(
-  (a, b) => b.data.date.getTime() - a.data.date.getTime()
+// 全部文档（含草稿/待完成），按文件名排序即学习顺序
+const all = (await getCollection('induction')).sort((a, b) =>
+  a.id.localeCompare(b.id, 'zh-CN', { numeric: true })
 );
+
+// 已发布（非草稿）的文档卡片列表
+const docs = all.filter((e) => !e.data.draft);
+
+// 待完成文档（status: todo）
+const todo = all.filter((e) => e.data.status === 'todo');
 
 const base = import.meta.env.BASE_URL;
 
@@ -35,44 +42,124 @@ const fmtDate = (d: Date) =>
         <code class="whitespace-nowrap rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-sm dark:bg-zinc-800">
           src/content/induction/
         </code>
-        下添加 Markdown 文件。
+        下添加 Markdown 文件，并在 frontmatter 中填写
+        <code class="rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-sm dark:bg-zinc-800">
+          status: done / todo
+        </code>
+        。
       </p>
     </header>
 
-    <!-- 文档列表 -->
-    {docs.length === 0 ? (
-      <p class="rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
-        还没有内容，去 <code>src/content/induction/</code> 下新建第一个 .md 文件吧。
-      </p>
-    ) : (
-      <ul class="grid gap-4 md:grid-cols-2">
-        {docs.map((doc) => (
-          <li>
-            <a
-              href={`${base}induction-training/${doc.id}`}
-              class="tech-card block p-5"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <h3 class="text-lg font-bold">{doc.data.title}</h3>
-                <Icon name="mdi:arrow-right" class="mt-1 h-4 w-4 shrink-0 text-zju-400" />
-              </div>
-              <p class="mt-2 line-clamp-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                {doc.data.description}
-              </p>
-              <div class="mt-4 flex flex-wrap items-center gap-3 font-mono text-xs text-zinc-500">
-                <time>{fmtDate(doc.data.date)}</time>
-                <span>·</span>
-                <span>{doc.data.author}</span>
-                {doc.data.tags?.slice(0, 3).map((tag) => (
-                  <span class="rounded-full border border-zinc-300 px-2 py-0.5 dark:border-zinc-700">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            </a>
-          </li>
-        ))}
-      </ul>
+    <!-- 1. 学习路线 -->
+    <section class="mb-14">
+      <div class="mb-6 flex items-center gap-3">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-zju-900/10 text-sky-500 dark:bg-sky-400/10">
+          <Icon name="mdi:map-marker-path" class="h-5 w-5" />
+        </span>
+        <h2 class="text-2xl font-bold">学习路线</h2>
+        <span class="font-mono text-sm text-zinc-500">按编号顺序依次推进</span>
+      </div>
+
+      <ol class="space-y-3">
+        {all.map((doc, i) => {
+          const isTodo = doc.data.status === 'todo';
+          return (
+            <li class="flex items-center gap-3">
+              <span
+                class:list={[
+                  'grid h-9 w-9 shrink-0 place-items-center rounded-lg border font-mono text-xs font-bold',
+                  isTodo
+                    ? 'border-zinc-700 bg-white/5 text-zinc-500'
+                    : 'border-sky-400/40 bg-sky-400/10 text-sky-300',
+                ]}
+              >
+                {String(i + 1).padStart(2, '0')}
+              </span>
+
+              {isTodo ? (
+                <span class="font-medium text-zinc-500">{doc.data.title}</span>
+              ) : (
+                <a
+                  href={`${base}induction-training/${doc.id}`}
+                  class="font-medium text-zinc-200 transition-colors hover:text-sky-300"
+                >
+                  {doc.data.title}
+                </a>
+              )}
+
+              {isTodo ? (
+                <span class="ml-auto rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-500">
+                  待完成
+                </span>
+              ) : (
+                <span class="ml-auto rounded-full border border-sky-400/40 bg-sky-400/10 px-2.5 py-0.5 text-xs text-sky-300">
+                  ✓ 已完成
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+
+    <!-- 2. 待完成文档 -->
+    {todo.length > 0 && (
+      <section class="mb-14">
+        <div class="mb-6 flex items-center gap-3">
+          <span class="grid h-10 w-10 place-items-center rounded-xl bg-zju-900/10 text-zinc-400 dark:bg-sky-400/10">
+            <Icon name="mdi:clipboard-text-clock-outline" class="h-5 w-5" />
+          </span>
+          <h2 class="text-2xl font-bold">待完成文档</h2>
+          <span class="font-mono text-sm text-zinc-500">{todo.length} 篇规划中</span>
+        </div>
+
+        <ul class="grid gap-3 sm:grid-cols-2">
+          {todo.map((doc) => (
+            <li class="rounded-xl border border-dashed border-zinc-700 bg-white/[0.02] px-4 py-3">
+              <p class="text-sm font-medium text-zinc-400">{doc.data.title}</p>
+              <p class="mt-1 text-xs text-zinc-600">{doc.data.description}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    <!-- 3. 文档列表 -->
+    {docs.length > 0 && (
+      <section>
+        <div class="mb-6 flex items-center gap-3">
+          <span class="grid h-10 w-10 place-items-center rounded-xl bg-zju-900/10 text-sky-500 dark:bg-sky-400/10">
+            <Icon name="mdi:book-open-variant" class="h-5 w-5" />
+          </span>
+          <h2 class="text-2xl font-bold">全部文档</h2>
+        </div>
+
+        <ul class="grid gap-4 md:grid-cols-2">
+          {docs.map((doc) => (
+            <li>
+              <a href={`${base}induction-training/${doc.id}`} class="tech-card block p-5">
+                <div class="flex items-start justify-between gap-3">
+                  <h3 class="text-lg font-bold">{doc.data.title}</h3>
+                  <Icon name="mdi:arrow-right" class="mt-1 h-4 w-4 shrink-0 text-zju-400" />
+                </div>
+                <p class="mt-2 line-clamp-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                  {doc.data.description}
+                </p>
+                <div class="mt-4 flex flex-wrap items-center gap-3 font-mono text-xs text-zinc-500">
+                  <time>{fmtDate(doc.data.date)}</time>
+                  <span>·</span>
+                  <span>{doc.data.author}</span>
+                  {doc.data.tags?.slice(0, 3).map((tag) => (
+                    <span class="rounded-full border border-zinc-300 px-2 py-0.5 dark:border-zinc-700">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
     )}
   </div>
 </BaseLayout>
