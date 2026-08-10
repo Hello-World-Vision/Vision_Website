@@ -52,8 +52,8 @@ const cards = [
     </div>
 
     <div class="container-page relative z-10 flex h-full flex-col">
-      <!-- ── 中央区域：左右分栏 ────────────────────────────── -->
-      <div class="flex min-h-0 flex-1 items-center justify-between gap-8 py-6 md:gap-12">
+      <!-- ── 中央区域：左右分栏（-mt 上移重心） ─────────────── -->
+      <div class="flex min-h-0 flex-1 -mt-24 items-center justify-between gap-8 py-6 md:gap-12">
         <!-- 左：Typography -->
         <div class="max-w-2xl shrink">
           <h1 class="leading-tight">
@@ -73,25 +73,25 @@ const cards = [
           </p>
         </div>
 
-        <!-- 右：Hello World 队徽（悬浮呼吸动画） -->
+        <!-- 右：Hello World 队徽（悬浮呼吸动画 + 辉光融合） -->
         <div class="relative shrink-0">
-          <!-- 背后的辉光 -->
-          <div
-            aria-hidden="true"
-            class="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/20 blur-[80px]"
-          ></div>
-          <div class="hero-logo relative">
+          <div class="hero-logo relative flex items-center justify-center">
+            <!-- 背后的辉光（随队徽一起浮动，mix-blend-screen 会与其融合） -->
+            <div
+              aria-hidden="true"
+              class="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-500/20 blur-[80px]"
+            ></div>
             <Image
               src={teamLogo}
               alt="Hello World 队徽"
-              class="invert mix-blend-screen h-52 w-52 object-contain drop-shadow-[0_0_30px_rgba(56,189,248,0.35)] md:h-72 md:w-72 lg:h-80 lg:w-80"
+              class="relative invert mix-blend-screen h-52 w-52 object-contain md:h-72 md:w-72 lg:h-80 lg:w-80"
             />
           </div>
         </div>
       </div>
 
-      <!-- ── 底部：三张入口卡片 ────────────────────────────── -->
-      <div class="grid grid-cols-3 gap-4 pb-7 sm:gap-6">
+      <!-- ── 底部：三张入口卡片（mt 拉开与上方内容的呼吸感） ── -->
+      <div class="mt-16 grid grid-cols-3 gap-4 pb-8 sm:gap-6">
         {cards.map((card) => (
           <a
             href={card.href}
