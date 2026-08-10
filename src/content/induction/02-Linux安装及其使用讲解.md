@@ -4,6 +4,7 @@ description: "Ubuntu 双系统安装与环境部署的核心思路与外部资�
 author: "视觉组"
 date: 2026-08-10
 tags: ["Linux", "Ubuntu", "环境配置", "双系统"]
+status: done
 draft: false
 ---
 
