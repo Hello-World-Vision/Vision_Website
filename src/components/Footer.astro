@@ -1,0 +1,50 @@
+---
+// =============================================================================
+// Footer — 全站页脚
+// 修改方式：直接编辑下方文字 / 链接即可。
+// =============================================================================
+import { Icon } from 'astro-icon/components';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="relative z-10 border-t border-zinc-200 dark:border-zinc-800">
+  <div class="container-page flex flex-col items-center justify-between gap-4 py-8 sm:flex-row">
+    <p class="text-sm text-zinc-500 dark:text-zinc-400">
+      © {year} ZJU Vision Group · 浙江大学视觉组
+    </p>
+
+    <div class="flex items-center gap-4">
+      <a
+        href="https://github.com/ZJU-Vision"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-zinc-500 transition-colors hover:text-zju-400"
+      >
+        <Icon name="mdi:github" class="h-5 w-5" />
+      </a>
+      <a
+        href="https://space.bilibili.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-zinc-500 transition-colors hover:text-zju-400"
+      >
+        <Icon name="mdi:play-box-multiple-outline" class="h-5 w-5" />
+      </a>
+      <a href="/docs" class="text-sm text-zinc-500 transition-colors hover:text-zju-400">
+        文档
+      </a>
+      <a href="/members" class="text-sm text-zinc-500 transition-colors hover:text-zju-400">
+        团队成员
+      </a>
+    </div>
+
+    <a
+      href="#"
+      class="grid h-9 w-9 place-items-center rounded-full border border-zinc-300 text-zinc-500 transition-all hover:-translate-y-0.5 hover:border-zju-400 hover:text-zju-400 dark:border-zinc-700"
+      aria-label="回到顶部"
+    >
+      <Icon name="mdi:arrow-up" class="h-4 w-4" />
+    </a>
+  </div>
+</footer>

@@ -1,0 +1,220 @@
+---
+// =============================================================================
+// 成员展示页 src/pages/members.astro（路由：/members）
+// 完全由 src/content/members/*.md 动态生成：
+//   - 新增成员 = 在 src/content/members/ 下新建一个 .md 文件
+//   - 显示顺序 = 集合内的默认顺序（文件名排序）
+//   - 改布局 = 只改这里或 components/MemberSection.astro
+// =============================================================================
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ParticleCanvas from '../components/ParticleCanvas.astro';
+import MemberSection from '../components/MemberSection.astro';
+import { getCollection, render } from 'astro:content';
+import type { ImageMetadata } from 'astro';
+
+// 读取全部成员（草稿除外）
+const members = (await getCollection('members')).filter((e) => !e.data.draft);
+
+// 预先渲染每位成员的 Markdown 正文（MemberSection 会展示在信息块之后）
+const roster = await Promise.all(
+  members.map(async (entry) => ({
+    data: entry.data,
+    id: entry.id,
+    Content: (await render(entry)).Content,
+  }))
+);
+
+// 辅助类型收窄：把 schema 中 z.image() 的结果断言为 ImageMetadata（构建期已保证真实）
+const toImage = (img: { src?: string } | undefined): ImageMetadata | undefined =>
+  img as unknown as ImageMetadata | undefined;
+const toImages = (imgs: { src?: string }[]): ImageMetadata[] =>
+  imgs as unknown as ImageMetadata[];
+const toSocials = (list: { label?: string; url?: string }[]) =>
+  list as { label: string; url: string }[];
+---
+
+<BaseLayout
+  title="团队成员"
+  description="浙江大学视觉组（ZJU Vision Group）成员档案 —— 用视觉重新定义战场的年轻人们。"
+  hideFooter
+>
+  <!--
+    沉浸式全屏背景层（复刻参考仓库 superpower.icu/members）：
+      1. 三团呼吸光晕 blobs
+      2. 淡科技网格
+      3. 跟随鼠标的聚光斑 cursor-spot
+      4. 全屏粒子网络 ParticleCanvas
+    想整页替换背景动效，删除/修改这里的 div 即可。
+  -->
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+    <div
+      class="absolute -left-40 -top-40 h-[620px] w-[620px] rounded-full"
+      style="background: radial-gradient(circle, rgba(74,143,221,0.14), transparent 65%); filter: blur(90px); animation: blobBreathe 14s ease-in-out infinite;"
+    ></div>
+    <div
+      class="absolute -bottom-48 -right-40 h-[520px] w-[520px] rounded-full"
+      style="background: radial-gradient(circle, rgba(56,189,248,0.1), transparent 65%); filter: blur(90px); animation: blobBreathe 12s ease-in-out 4s infinite;"
+    ></div>
+    <!-- 跟随鼠标的聚光斑 -->
+    <div
+      class="cursor-spot"
+      style="transform: translate(var(--cursor-x, -9999px), var(--cursor-y, -9999px)); background: radial-gradient(circle, rgba(56,189,248,0.12), rgba(74,143,221,0.05), transparent 70%); filter: blur(80px); opacity: 0.5; transition: opacity 0.6s var(--ease-out);"
+    ></div>
+  </div>
+  <ParticleCanvas count={90} class="fixed inset-0 z-0 h-full w-full" />
+
+  <!-- 页面内容（浮在背景层之上） -->
+  <div class="relative z-10">
+    <!-- ── Hero：居中大字 + 打字机效果 + 成员锚点 ── -->
+    <section class="flex min-h-[100svh] scroll-mt-16 items-center py-24">
+      <div class="container-page text-center">
+        <p class="eyebrow mb-6 text-sky-400 reveal">ZJU VISION / ROSTER CONSOLE</p>
+        <h1 class="reveal text-5xl font-black leading-none tracking-tight sm:text-7xl">
+          <span data-typewriter>优秀队员展示</span>
+        </h1>
+        <p class="reveal mx-auto mt-8 max-w-xl text-base leading-8 text-zinc-500 dark:text-zinc-400">
+          这里记录着视觉组每一位队员的履历：目标、贡献、技术栈与赛季记忆，清晰展开。
+        </p>
+        <div class="reveal mt-10 flex flex-wrap justify-center gap-3">
+          {roster.map((m, i) => (
+            <a
+              href={`#member-${i}`}
+              class="rounded-xl border border-zinc-300 px-5 py-2.5 text-sm font-bold backdrop-blur transition-all hover:-translate-y-0.5 hover:border-sky-400/60 hover:bg-sky-400/10 dark:border-zinc-700"
+            >
+              {m.data.name}
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 每位成员一个整屏档案区块 ── -->
+    {roster.map((m, i) => (
+      <MemberSection
+        name={m.data.name}
+        nameEn={m.data.nameEn}
+        avatar={toImage(m.data.avatar)}
+        photos={toImages(m.data.photos)}
+        position={m.data.position}
+        badges={m.data.badges}
+        tech={m.data.tech}
+        contribution={m.data.contribution}
+        experience={m.data.experience}
+        socials={toSocials(m.data.socials)}
+        index={i}
+        Content={m.Content}
+      />
+    ))}
+
+    <!-- ── TBC 区块 ── -->
+    <section class="flex min-h-[80svh] scroll-mt-16 items-center text-center">
+      <div class="container-page">
+        <p class="eyebrow mb-6 text-sky-400 reveal">ROSTER EXPANSION</p>
+        <h2 class="reveal text-4xl font-black tracking-tight sm:text-6xl">
+          TO BE CONTINUED<span class="ml-2 inline-block h-[0.78em] w-[0.08em] bg-sky-400 align-middle" style="animation: blinkCursor 0.9s steps(1) infinite;"></span>
+        </h2>
+        <p class="reveal mx-auto mt-6 max-w-md text-base text-zinc-500 dark:text-zinc-400">
+          更多队员，更多赛季故事，正在编队。
+        </p>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  /* 成员页启用整页纵向吸附滚动（移动端关闭，避免误触） */
+  @media (min-width: 768px) {
+    html {
+      scroll-snap-type: y proximity;
+    }
+  }
+
+  /* 打字机逐字进场 */
+  .type-char {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(12px);
+    animation: typeIn 0.35s var(--ease-out) forwards;
+  }
+  @keyframes typeIn {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+
+<script>
+  // ── 打字机效果：逐个字符"打出"大标题 ──
+  document.querySelectorAll('[data-typewriter]').forEach((el) => {
+    const text = el.textContent || '';
+    el.textContent = '';
+    let i = 0;
+    const tick = () => {
+      if (i < text.length) {
+        const span = document.createElement('span');
+        span.textContent = text[i];
+        span.classList.add('type-char');
+        el.appendChild(span);
+        i++;
+        setTimeout(tick, 45 + (Math.random() - 0.5) * 18);
+      }
+    };
+    setTimeout(tick, 300);
+  });
+
+  // ── 滚动进场动画：进入视口后加上 is-visible ──
+  const revealObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.2 }
+  );
+  document.querySelectorAll('.reveal').forEach((node) => revealObserver.observe(node));
+
+  // ── 照片轮播：自动播放 + 手动切换 ──
+  document.querySelectorAll('[data-carousel]').forEach((carousel) => {
+    const slides = Array.from(carousel.querySelectorAll('[data-slide]'));
+    const dots = Array.from(carousel.querySelectorAll('[data-carousel-dot]'));
+    const prev = carousel.querySelector('[data-carousel-prev]');
+    const next = carousel.querySelector('[data-carousel-next]');
+    let cur = 0;
+    let timer: number | null = null;
+
+    const show = (i: number) => {
+      slides[cur]?.classList.add('opacity-0');
+      slides[cur]?.classList.remove('opacity-100');
+      dots[cur]?.classList.remove('bg-white');
+      cur = (i + slides.length) % slides.length;
+      slides[cur]?.classList.remove('opacity-0');
+      slides[cur]?.classList.add('opacity-100');
+      dots[cur]?.classList.add('bg-white');
+    };
+    const restart = () => {
+      if (timer !== null) window.clearInterval(timer);
+      if (slides.length > 1) timer = window.setInterval(() => show(cur + 1), 5200);
+    };
+
+    prev?.addEventListener('click', () => { show(cur - 1); restart(); });
+    next?.addEventListener('click', () => { show(cur + 1); restart(); });
+    dots.forEach((d, i) => d.addEventListener('click', () => { show(i); restart(); }));
+    carousel.addEventListener('mouseenter', () => { if (timer !== null) window.clearInterval(timer); });
+    carousel.addEventListener('mouseleave', restart);
+    restart();
+  });
+
+  // ── 鼠标聚光斑跟随 ──
+  window.addEventListener(
+    'pointermove',
+    (e) => {
+      document.body.style.setProperty('--cursor-x', e.clientX + 'px');
+      document.body.style.setProperty('--cursor-y', e.clientY + 'px');
+    },
+    { passive: true }
+  );
+</script>

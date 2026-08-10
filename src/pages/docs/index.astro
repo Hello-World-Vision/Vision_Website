@@ -1,0 +1,123 @@
+---
+// =============================================================================
+// 文档索引页 src/pages/docs/index.astro（路由：/docs）
+// 自动列出 src/content/algorithms/ 与 src/content/open-source/ 的全部内容，
+// 并按集合分组展示。无需维护任何列表 —— 新增文章后这里自动出现。
+// =============================================================================
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { Icon } from 'astro-icon/components';
+import { getCollection } from 'astro:content';
+
+const published = <T extends { data: { draft?: boolean } }>(entries: T[]): T[] =>
+  entries.filter((e) => !e.data.draft);
+
+// 统一的文档条目类型（读取集合后收窄，避免集合间的联合类型干扰模板推断）
+interface DocEntry {
+  collection: string;
+  slug: string;
+  id: string;
+  data: {
+    title: string;
+    description: string;
+    author: string;
+    date: Date;
+    tags?: string[];
+  };
+}
+
+// 按日期倒序排列，最新的在最前
+const sortByDateDesc = (a: DocEntry, b: DocEntry) =>
+  b.data.date.getTime() - a.data.date.getTime();
+
+const algorithms = published(await getCollection('algorithms')) as unknown as DocEntry[];
+const openSource = published(await getCollection('open-source')) as unknown as DocEntry[];
+
+const groups: { label: string; folder: string; icon: string; items: DocEntry[] }[] = [
+  {
+    label: '算法教程',
+    folder: 'algorithms',
+    icon: 'mdi:book-open-variant',
+    items: algorithms.sort(sortByDateDesc),
+  },
+  {
+    label: '开源项目',
+    folder: 'open-source',
+    icon: 'mdi:code-tags',
+    items: openSource.sort(sortByDateDesc),
+  },
+];
+
+const fmtDate = (d: Date) =>
+  new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' }).format(d);
+---
+
+<BaseLayout title="文档" description="浙江大学视觉组文档中心 —— 算法教程与开源项目。">
+  <div class="container-page py-16">
+    <!-- 页头 -->
+    <header class="mb-12">
+      <p class="eyebrow mb-4 text-sky-400">DOCUMENTATION</p>
+      <h1 class="text-4xl font-black tracking-tight sm:text-5xl">文档中心</h1>
+      <p class="mt-4 max-w-xl text-zinc-600 dark:text-zinc-400">
+        教程、开源项目一站式阅读。新增内容只需在
+        <code class="rounded bg-zinc-200 px-1.5 py-0.5 font-mono text-sm dark:bg-zinc-800">
+          src/content/
+        </code>
+        下添加 Markdown 文件。
+      </p>
+    </header>
+
+    <!-- 分组列表 -->
+    <div class="space-y-14">
+      {groups.map((group) => (
+        <section>
+          <div class="mb-6 flex items-center gap-3">
+            <span
+              class="grid h-10 w-10 place-items-center rounded-xl bg-zju-900/10 text-sky-500 dark:bg-sky-400/10"
+            >
+              <Icon name={group.icon} class="h-5 w-5" />
+            </span>
+            <h2 class="text-2xl font-bold">{group.label}</h2>
+            <span class="font-mono text-sm text-zinc-500">{group.items.length}</span>
+          </div>
+
+          {group.items.length === 0 ? (
+            <p class="rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+              还没有内容，去 <code>src/content/{group.folder}/</code> 下新建第一个 .md 文件吧。
+            </p>
+          ) : (
+            <ul class="grid gap-4 md:grid-cols-2">
+              {group.items.map((item) => (
+                <li>
+                  <a
+                    href={`/docs/${item.collection}/${item.id}`}
+                    class="tech-card block p-5"
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <h3 class="text-lg font-bold">{item.data.title}</h3>
+                      <Icon name="mdi:arrow-right" class="mt-1 h-4 w-4 shrink-0 text-zju-400" />
+                    </div>
+                    <p class="mt-2 line-clamp-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                      {item.data.description}
+                    </p>
+                    <div class="mt-4 flex flex-wrap items-center gap-3 font-mono text-xs text-zinc-500">
+                      <time>{fmtDate(item.data.date)}</time>
+                      <span>·</span>
+                      <span>{item.data.author}</span>
+                      {item.data.tags?.slice(0, 3).map((tag) => (
+                        <span
+                          class="rounded-full border border-zinc-300 px-2 py-0.5 dark:border-zinc-700"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

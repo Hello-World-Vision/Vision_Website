@@ -1,0 +1,84 @@
+# =============================================================================
+# GitHub Actions — 自动构建 Astro 并部署到 GitHub Pages
+# -----------------------------------------------------------------------------
+# 使用方法：
+#   1. 把仓库推到 GitHub（分支名若为 master，请把下面的 [main] 改成 [master]）
+#   2. 仓库 Settings → Pages → Source 选择 "GitHub Actions"
+#   3. 每次 push 到 main 分支，或手动触发 workflow_dispatch，就会自动发布
+#
+# 注意：本工作流使用的是 GitHub 官方推荐的 Actions 部署方式，
+#       产物并非推送到 gh-pages 分支，而是由 Actions 直接发布到 Pages。
+#       如需"推送 gh-pages 分支"的旧方案，见文件末尾的注释。
+#
+# 若部署到子路径（<用户名>.github.io/<仓库名>/），请同步修改
+# astro.config.mjs 中的 base 字段，否则资源路径会 404。
+# =============================================================================
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个部署任务，新的 push 会取消进行中的任务
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Astro 7 要求 Node >= 22.12
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with Astro
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Astro 默认输出目录为 dist
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 旧方案（可选）：如果你希望产物被推送到 gh-pages 分支，可把上方 deploy job
+# 替换为如下内容（需要仓库已配置好权限的 GITHUB_TOKEN）：
+#
+#   deploy:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Deploy
+#         uses: peaceiris/actions-gh-pages@v4
+#         with:
+#           github_token: ${{ secrets.GITHUB_TOKEN }}
+#           publish_dir: ./dist
+# ═════════════════════════════════════════════════════════════════════════════

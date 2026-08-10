@@ -1,0 +1,145 @@
+---
+// =============================================================================
+// DocLayout — 文章阅读布局
+// 用于 docs 系列页面（/docs/algorithms/xxx、/docs/open-source/xxx）。
+// 在 BaseLayout 基础上套上一层「窄栏 + 目录 + 正文排版」结构：
+//   - 文章头部：标题 / 作者 / 日期 / 阅读时长 / 标签
+//   - 侧边目录（TOC）：根据正文 H2~H4 生成，长文时非常有用
+//   - 正文：使用 @tailwindcss/typography 的 prose 类获得优雅排版
+//
+// 用法：在页面里 <DocLayout ...> ... </DocLayout>，
+//       页面负责 render(entry) 并传入 Content 组件、headings、frontmatter。
+// =============================================================================
+import BaseLayout from './BaseLayout.astro';
+import { Icon } from 'astro-icon/components';
+
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+interface Props {
+  title: string;
+  description: string;
+  author?: string;
+  date?: Date;
+  readingTime?: number;
+  tags?: string[];
+  collectionLabel?: string;
+  /** 渲染好的正文内容（由子页面传入） */
+  Content: any;
+  /** 标题树，用于生成目录 */
+  headings?: Heading[];
+}
+
+const {
+  title,
+  description,
+  author,
+  date,
+  readingTime,
+  tags = [],
+  collectionLabel,
+  Content,
+  headings = [],
+} = Astro.props;
+
+// 取深度 2~4 的标题作为目录项
+const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 4);
+
+const formattedDate = date
+  ? new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
+  : '';
+---
+
+<BaseLayout title={title} description={description}>
+  <!-- 文章主体：窄栏居中 + 右侧目录 -->
+  <div class="container-page grid gap-10 py-16 lg:grid-cols-[1fr_240px]">
+    <article>
+      <!-- ── 文章头部信息 ─────────────────────────────────── -->
+      <header class="mb-10 border-b border-zinc-200 pb-8 dark:border-zinc-800">
+        {collectionLabel && <p class="eyebrow mb-4 text-zju-400">{collectionLabel}</p>}
+        <h1 class="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+          {title}
+        </h1>
+        <p class="mt-4 text-base leading-relaxed text-zinc-600 dark:text-zinc-400">
+          {description}
+        </p>
+
+        <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
+          {author && (
+            <span class="flex items-center gap-1.5">
+              <Icon name="mdi:account" class="h-4 w-4 text-zju-400" />
+              {author}
+            </span>
+          )}
+          {formattedDate && (
+            <time class="flex items-center gap-1.5">
+              <Icon name="mdi:calendar-blank-outline" class="h-4 w-4 text-zju-400" />
+              {formattedDate}
+            </time>
+          )}
+          {readingTime && (
+            <span class="flex items-center gap-1.5">
+              <Icon name="mdi:clock-outline" class="h-4 w-4 text-zju-400" />
+              约 {readingTime} 分钟
+            </span>
+          )}
+        </div>
+
+        {tags.length > 0 && (
+          <div class="mt-4 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span
+                class="rounded-full border border-zinc-300 px-3 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </header>
+
+      <!-- ── 正文：prose 排版（H1~H6/Blockquote/Table/代码块全部生效）── -->
+      <div class="prose prose-zinc max-w-none dark:prose-invert dark:prose-headings:text-zinc-100 prose-a:text-zju-500 dark:prose-a:text-zju-300 prose-pre:border prose-pre:border-zinc-700 prose-pre:bg-zinc-900">
+        <Content />
+      </div>
+    </article>
+
+    <!-- ── 右侧目录（窄屏自动隐藏）────────────────────────── -->
+    {toc.length > 0 && (
+      <aside class="hidden lg:block">
+        <div class="sticky top-24 rounded-2xl border border-zinc-200 bg-white/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50 backdrop-blur">
+          <p class="eyebrow mb-4 text-zju-400">目录</p>
+          <nav class="space-y-2 text-sm">
+            {toc.map((h) => (
+              <a
+                href={`#${h.slug}`}
+                class:list={[
+                  'block leading-snug transition-colors hover:text-zju-400',
+                  h.depth === 3 ? 'pl-4' : '',
+                  h.depth === 4 ? 'pl-8' : '',
+                  'text-zinc-500 dark:text-zinc-400',
+                ]}
+              >
+                {h.text}
+              </a>
+            ))}
+          </nav>
+        </div>
+      </aside>
+    )}
+  </div>
+
+  <!-- 返回列表按钮 -->
+  <div class="container-page pb-16">
+    <a
+      href="/docs"
+      class="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium transition-colors hover:border-zju-400 hover:text-zju-400 dark:border-zinc-700"
+    >
+      <Icon name="mdi:arrow-left" class="h-4 w-4" />
+      返回全部文档
+    </a>
+  </div>
+</BaseLayout>

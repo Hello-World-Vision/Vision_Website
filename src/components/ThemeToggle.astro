@@ -1,0 +1,32 @@
+---
+// =============================================================================
+// ThemeToggle — 深色 / 浅色切换按钮
+// 逻辑：
+//   - 默认深色（<html class="dark">）
+//   - 点击后切换 html.dark 并持久化到 localStorage['zju-theme']
+//   - 首次加载时的主题恢复由 BaseLayout 中的 is:inline 脚本完成（防闪烁）
+// =============================================================================
+import { Icon } from 'astro-icon/components';
+---
+
+<button
+  id="theme-toggle"
+  type="button"
+  title="切换深浅色"
+  aria-label="切换深浅色"
+  class="grid h-9 w-9 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+>
+  <Icon name="mdi:weather-night" class="h-5 w-5 dark:hidden" />
+  <Icon name="mdi:weather-sunny" class="hidden h-5 w-5 dark:block" />
+</button>
+
+<script>
+  const btn = document.getElementById('theme-toggle');
+  btn?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const isDark = root.classList.toggle('dark');
+    try {
+      localStorage.setItem('zju-theme', isDark ? 'dark' : 'light');
+    } catch (_) {}
+  });
+</script>

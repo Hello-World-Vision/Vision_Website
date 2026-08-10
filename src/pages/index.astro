@@ -1,0 +1,147 @@
+---
+// =============================================================================
+// 首页 src/pages/index.astro（路由：/）
+// 结构：
+//   1. Hero 首屏 —— 预留 #hero-canvas-container（Three.js / Canvas 动画容器）
+//                  并已内置一个原生 Canvas 粒子网络（ParticleCanvas）作为起步动效
+//   2. 入口卡片区 —— 算法 / 开源 / 团队 三张反重力悬浮卡片（数据来自内容集合）
+//
+// 定制指南：
+//   - 想换背景动效：替换 <ParticleCanvas /> 为 Three.js 组件即可（容器已预留）
+//   - 想改首屏文案：直接改下方 h1 / 副标题 / 按钮
+//   - 想增减入口卡片：改 sections 数组并在下方 <EntryCard /> 处增删
+// =============================================================================
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { Icon } from 'astro-icon/components';
+import { getCollection } from 'astro:content';
+import ParticleCanvas from '../components/ParticleCanvas.astro';
+import EntryCard from '../components/EntryCard.astro';
+
+// 读取全部内容集合（仅展示未标记 draft 的内容）
+const published = <T extends { data: { draft?: boolean } }>(entries: T[]): T[] =>
+  entries.filter((e) => !e.data.draft);
+
+const algorithms = published(await getCollection('algorithms'));
+const openSource = published(await getCollection('open-source'));
+const members = published(await getCollection('members'));
+
+// 算法卡片可取的封面图（若有）
+const algoCover = algorithms.find((a) => a.data.cover)?.data.cover?.src;
+
+// 三个入口卡片的数据源
+const sections = [
+  {
+    href: '/docs',
+    icon: 'mdi:book-open-variant',
+    title: '算法库',
+    subtitle: 'ALGORITHMS',
+    description: '沉淀视觉自瞄、深度学习、工程实践等全部教程，新人从这里起飞。',
+    meta: `${algorithms.length} 篇文章`,
+    bgImage: algoCover,
+  },
+  {
+    href: '/docs',
+    icon: 'mdi:code-tags',
+    title: '开源项目',
+    subtitle: 'OPEN SOURCE',
+    description: '我们把踩过的坑、沉淀的代码全部开源，回馈 RoboMaster 社区。',
+    meta: `${openSource.length} 个项目`,
+    bgImage: undefined,
+  },
+  {
+    href: '/members',
+    icon: 'mdi:account-group',
+    title: '团队成员',
+    subtitle: 'THE CREW',
+    description: '一群在战场上用代码与算法驰骋的年轻人，认识每一位队员。',
+    meta: `${members.length} 位成员`,
+    bgImage: undefined,
+  },
+];
+---
+
+<BaseLayout>
+  <!-- ============================================================
+       HERO 首屏
+       核心：<div id="hero-canvas-container"> 就是为后续炫酷视觉预留的容器
+       现在它内部渲染了 ParticleCanvas（原生 Canvas 粒子网络），
+       将来要换 Three.js / WebGL 粒子时，直接替换容器内的组件即可。
+       ============================================================ -->
+  <section class="relative flex min-h-[100svh] items-center justify-center overflow-hidden">
+    <!-- 预留的 Canvas / 3D 渲染容器：此处预留给后续的 Three.js / 原生 Canvas 粒子动画渲染 -->
+    <div id="hero-canvas-container" class="absolute inset-0 z-0">
+      <!-- 科技网格光层（可整体删除换掉） -->
+      <div class="bg-tech-grid absolute inset-0 opacity-70"></div>
+      <!-- 起步动效：原生 Canvas 粒子网络 -->
+      <ParticleCanvas count={110} linkDistance={150} class="absolute inset-0 h-full w-full" />
+    </div>
+
+    <!-- 首屏文字（浮在粒子层之上） -->
+    <div class="container-page relative z-10 py-24 text-center">
+      <p class="eyebrow mb-6 text-sky-400">ZJU · ROBOMASTER VISION DIVISION</p>
+
+      <h1 class="glow-text mx-auto text-5xl font-black tracking-tight sm:text-7xl lg:text-8xl">
+        ZJU Vision Group
+      </h1>
+
+      <p class="mx-auto mt-6 max-w-2xl font-mono text-base leading-8 text-zinc-400 sm:text-lg">
+        PERCEPTION BEFORE ACTION.
+        <span class="text-zinc-500 dark:text-zinc-300">—— 用视觉重新定义战场。</span>
+      </p>
+
+      <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
+        <a
+          href="/docs"
+          class="group inline-flex items-center gap-2 rounded-full bg-zju-800 px-7 py-3 text-sm font-semibold text-white shadow-glow-zju transition-all hover:bg-zju-700 hover:shadow-glow-zju-lg"
+        >
+          浏览算法库
+          <Icon name="mdi:arrow-right" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </a>
+        <a
+          href="/members"
+          class="inline-flex items-center gap-2 rounded-full border border-zinc-500 px-7 py-3 text-sm font-semibold text-zinc-200 transition-all hover:border-sky-400 hover:text-sky-300"
+        >
+          认识团队
+        </a>
+      </div>
+
+      <!-- 滚动提示 -->
+      <a
+        href="#cards"
+        class="absolute bottom-8 left-1/2 -translate-x-1/2 text-zinc-500 transition-colors hover:text-sky-300"
+        aria-label="向下滚动"
+      >
+        <Icon name="mdi:chevron-down" class="h-7 w-7 animate-bounce" />
+      </a>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       入口卡片区（算法 / 开源 / 团队）
+       ============================================================ -->
+  <section id="cards" class="container-page pb-24">
+    <div class="mb-10 flex items-end justify-between">
+      <div>
+        <p class="eyebrow mb-3 text-sky-400">EXPLORE</p>
+        <h2 class="text-3xl font-extrabold tracking-tight sm:text-4xl">从这里开始</h2>
+      </div>
+      <p class="hidden font-mono text-sm text-zinc-500 sm:block">
+        // 选择一个入口
+      </p>
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-3">
+      {sections.map((s) => (
+        <EntryCard
+          href={s.href}
+          icon={s.icon}
+          title={s.title}
+          subtitle={s.subtitle}
+          description={s.description}
+          meta={s.meta}
+          bgImage={s.bgImage}
+        />
+      ))}
+    </div>
+  </section>
+</BaseLayout>

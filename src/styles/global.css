@@ -1,0 +1,168 @@
+/* =============================================================================
+ * 全局样式（入口文件：src/layouts/BaseLayout.astro 中引入）
+ * -----------------------------------------------------------------------------
+ * 职责划分：
+ *   - 本文件：Tailwind 指令 + 全站通用 token / 工具类 / 全局关键帧
+ *   - 各 Astro 组件 <style>：组件专属的复杂关键帧动画
+ * ========================================================================== */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── 主题变量（ZJU 求是蓝 + 科技蓝）────────────────────────────────────── */
+:root {
+  --zju-50: #e6effb;
+  --zju-100: #c3daf5;
+  --zju-200: #9cc0ee;
+  --zju-300: #6fa5e6;
+  --zju-400: #4a8fdd;
+  --zju-500: #2a7ad4;
+  --zju-600: #1a62b3;
+  --zju-700: #0d4f9c;
+  --zju-800: #06408a;
+  --zju-900: #003f88; /* 求是蓝 */
+  --zju-950: #002a5e;
+  --accent: #38bdf8; /* 科技蓝（发光用） */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    /* 默认深色（极客黑），通过 html.dark 切换；亮色模式为白底黑字 */
+    @apply bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 antialiased;
+    font-family: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto,
+      'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  ::selection {
+    @apply bg-sky-400/30;
+  }
+
+  /* 细窄滚动条，深色科技风 */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-zinc-300 dark:bg-zinc-700;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-zinc-400 dark:bg-zinc-600;
+  }
+}
+
+@layer components {
+  /* 全站内容最大宽度容器（宽屏限定） */
+  .container-page {
+    @apply mx-auto w-full max-w-page px-6 sm:px-8;
+  }
+
+  /* 科技蓝发光文字（渐变字，用于大标题/关键词） */
+  .glow-text {
+    background: linear-gradient(115deg, #7dd3fc 0%, #4a8fdd 45%, #a78bfa 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* 极客 HUD 式小标签（eyebrow） */
+  .eyebrow {
+    @apply font-mono text-xs font-semibold uppercase tracking-[0.35em];
+  }
+
+  /* 反重力悬浮卡片（首页入口卡片通用外壳） */
+  .tech-card {
+    @apply relative overflow-hidden rounded-2xl border border-zinc-200 bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/60;
+    transition: transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out),
+      border-color 0.35s var(--ease-out);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+  .tech-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.35),
+      0 0 32px -8px rgba(56, 189, 248, 0.25);
+  }
+
+  /* 可选的科技网格背景（叠加在深色底上） */
+  .bg-tech-grid {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+}
+
+/* ── 滚动进场动画（复用参考仓库的 Reveal 效果）────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  filter: blur(4px);
+  transition: opacity 0.75s var(--ease-out), transform 0.75s var(--ease-out),
+    filter 0.75s var(--ease-out);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* 子元素依次进入（延迟递增，营造"编队进场"的感觉） */
+.reveal > * {
+  opacity: 0;
+  transform: translateY(16px);
+  filter: blur(3px);
+  transition: opacity 0.55s var(--ease-out), transform 0.55s var(--ease-out),
+    filter 0.55s var(--ease-out);
+}
+.reveal.is-visible > * {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+.reveal.is-visible > *:nth-child(2) { transition-delay: 0.08s; }
+.reveal.is-visible > *:nth-child(3) { transition-delay: 0.15s; }
+.reveal.is-visible > *:nth-child(4) { transition-delay: 0.22s; }
+.reveal.is-visible > *:nth-child(5) { transition-delay: 0.28s; }
+
+/* ── 全局关键帧（动画名被多处引用，放在这里便于复用）────────────────── */
+@keyframes blobBreathe {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  25% { transform: scale(1.1); opacity: 1; }
+  50% { transform: scale(1.03); opacity: 0.7; }
+  75% { transform: scale(1.14); opacity: 0.85; }
+}
+
+@keyframes blinkCursor {
+  50% { opacity: 0; }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes gridPan {
+  from { background-position: 0 0; }
+  to { background-position: 44px 44px; }
+}
+
+/* ── 无障碍：用户偏好减少动效时，关掉所有动画 ────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

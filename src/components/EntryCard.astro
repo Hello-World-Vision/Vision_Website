@@ -1,0 +1,74 @@
+---
+// =============================================================================
+// EntryCard — 首页入口卡片（算法 / 开源 / 团队）
+// 视觉：复刻参考仓库的卡片结构 —— 背景图片渐隐蒙版 + 悬浮上移 + 蓝色描边发光。
+// 数据全部由父页面传入，组件本身零数据依赖。
+// =============================================================================
+import { Icon } from 'astro-icon/components';
+
+interface Props {
+  /** 跳转地址 */
+  href: string;
+  /** Iconify 图标名（mdi 集合） */
+  icon: string;
+  /** 卡片主标题 */
+  title: string;
+  /** 副标题（HUD 风格小字） */
+  subtitle: string;
+  /** 描述文字 */
+  description: string;
+  /** 右下角统计信息（如 "12 篇文章"） */
+  meta?: string;
+  /** 背景图片 URL（可选，会以渐隐蒙版形式铺在卡片右侧） */
+  bgImage?: string;
+}
+
+const { href, icon, title, subtitle, description, meta, bgImage } = Astro.props;
+---
+
+<a
+  href={href}
+  class="tech-card group flex min-h-56 flex-col justify-between p-6"
+>
+  <!-- 右侧背景图片：带渐隐蒙版，hover 时透明度上升（复刻参考卡片效果） -->
+  {bgImage && (
+    <div
+      class="absolute inset-y-0 right-0 w-3/5 opacity-30 blur-[1px] transition-all duration-500 group-hover:opacity-50 group-hover:blur-0"
+      style={{
+        backgroundImage: `url(${bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center right',
+        WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 20%, transparent 100%)',
+        maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 20%, transparent 100%)',
+      }}
+    ></div>
+  )}
+
+  <!-- 左上角图标 -->
+  <div
+    class="relative z-10 grid h-11 w-11 place-items-center rounded-xl bg-zju-900/10 text-zju-600 dark:bg-sky-400/10 dark:text-sky-300"
+  >
+    <Icon name={icon} class="h-5 w-5" />
+  </div>
+
+  <!-- 文字内容 -->
+  <div class="relative z-10">
+    <p class="eyebrow mb-2 text-zinc-400">{subtitle}</p>
+    <h3 class="text-xl font-bold">{title}</h3>
+    <p class="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      {description}
+    </p>
+
+    <div class="mt-5 flex items-center justify-between">
+      {meta && (
+        <span class="font-mono text-xs text-zinc-400">{meta}</span>
+      )}
+      <span
+        class="inline-flex items-center gap-1 font-mono text-sm text-zju-500 transition-transform duration-300 group-hover:translate-x-1 dark:text-zju-300"
+      >
+        进入
+        <Icon name="mdi:arrow-right" class="h-4 w-4" />
+      </span>
+    </div>
+  </div>
+</a>

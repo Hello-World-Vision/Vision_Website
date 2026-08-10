@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+.astro/
+
+# 环境与编辑器
+.env
+.env.*
+.vscode/
+.DS_Store
+*.local
+
+# 日志
+npm-debug.log*
+pnpm-debug.log*

@@ -1,0 +1,80 @@
+---
+// =============================================================================
+// Header — 全站顶部导航栏
+// 特性：
+//   - 吸顶 + 毛玻璃（backdrop-blur）
+//   - 根据当前路径高亮激活导航项
+//   - 内置深浅色切换（ThemeToggle）与 GitHub 外链
+// 新增导航入口：在 navItems 数组里加一项即可。
+// =============================================================================
+import { Icon } from 'astro-icon/components';
+import ThemeToggle from './ThemeToggle.astro';
+
+interface NavItem {
+  label: string;
+  href: string;
+  /** 精确匹配（true：仅当前路径等于 href 时高亮） */
+  exact?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { label: '首页', href: '/', exact: true },
+  { label: '文档', href: '/docs' },
+  { label: '团队', href: '/members' },
+];
+
+// 判断激活态：非 exact 的导航项，其 href 是当前路径的前缀时也视为激活
+const isActive = (item: NavItem) =>
+  item.exact ? Astro.url.pathname === item.href : Astro.url.pathname.startsWith(item.href);
+---
+
+<header
+  class="sticky top-0 z-50 border-b border-zinc-200/70 bg-white/60 backdrop-blur-xl dark:border-zinc-800/70 dark:bg-zinc-950/50"
+>
+  <div class="container-page flex h-16 items-center justify-between">
+    <!-- 左侧 Logo -->
+    <a href="/" class="group flex items-center gap-2.5">
+      <span
+        class="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-zju-500 to-zju-900 font-mono text-sm font-bold text-white shadow-glow-zju"
+      >
+        ZV
+      </span>
+      <span class="font-mono text-sm font-semibold tracking-wide">
+        ZJU Vision Group
+      </span>
+    </a>
+
+    <!-- 右侧导航 -->
+    <nav class="flex items-center gap-1 sm:gap-2">
+      {navItems.map((item) => (
+        <a
+          href={item.href}
+          class:list={[
+            'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors sm:px-4',
+            isActive(item)
+              ? 'bg-zju-900/10 text-zju-800 dark:bg-sky-400/10 dark:text-sky-300'
+              : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white',
+          ]}
+        >
+          {item.label}
+        </a>
+      ))}
+
+      <span class="mx-1 hidden h-4 w-px bg-zinc-300 sm:block dark:bg-zinc-700"></span>
+
+      <!-- 外部链接：GitHub -->
+      <a
+        href="https://github.com/ZJU-Vision"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="GitHub"
+        class="grid h-9 w-9 place-items-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+      >
+        <Icon name="mdi:github" class="h-5 w-5" />
+      </a>
+
+      <!-- 深浅色切换 -->
+      <ThemeToggle />
+    </nav>
+  </div>
+</header>

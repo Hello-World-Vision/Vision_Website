@@ -1,0 +1,148 @@
+---
+// =============================================================================
+// ParticleCanvas — 科技感粒子网络背景（Canvas 2D 原生实现）
+// 特性（复刻参考仓库 superpower.icu 成员页的动效）：
+//   - 粒子缓慢漂移，粒子之间在阈值距离内自动连线
+//   - 鼠标靠近时粒子会被"推开"（斥力效果），配合移动端触摸
+//   - 支持多实例：页面中可放置多个 canvas，脚本会逐个初始化
+//
+// 用法：
+//   <ParticleCanvas class="absolute inset-0 h-full w-full" />
+//   父容器负责定位与尺寸；canvas 本身不拦截鼠标事件（pointer-events-none）。
+//
+// 进阶替换：若后续要升级为 Three.js / WebGL 粒子，
+//           只需在 index.astro 的 #hero-canvas-container 中换掉本组件即可。
+// =============================================================================
+interface Props {
+  /** 自定义 class（定位/尺寸由父容器决定） */
+  class?: string;
+  /** 粒子数量（默认 70） */
+  count?: number;
+  /** 连线阈值距离 px（默认 140） */
+  linkDistance?: number;
+  /** 粒子颜色 RGB 三元组（默认 ZJU 科技蓝） */
+  color?: string;
+  /** 粒子透明度（0~1，默认 0.55） */
+  opacity?: number;
+}
+
+const {
+  class: className,
+  count = 70,
+  linkDistance = 140,
+  color = '74,143,221',
+  opacity = 0.55,
+} = Astro.props;
+---
+
+<canvas
+  data-particle-canvas
+  aria-hidden="true"
+  class:list={[className, 'pointer-events-none']}
+  data-count={count}
+  data-link={linkDistance}
+  data-color={color}
+  data-opacity={opacity}
+></canvas>
+
+<script>
+  // 对页面中所有 [data-particle-canvas] 逐个初始化（支持同页多个实例）
+  document.querySelectorAll<HTMLCanvasElement>('[data-particle-canvas]').forEach((canvas) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const COUNT = Number(canvas.dataset.count || 70);
+    const LINK = Number(canvas.dataset.link || 140);
+    const RGB = canvas.dataset.color || '74,143,221';
+    const OPACITY = Number(canvas.dataset.opacity || 0.55);
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+    let W = 0;
+    let H = 0;
+    let mx = -1e4;
+    let my = -1e4;
+    let particles: { x: number; y: number; vx: number; vy: number; r: number }[] = [];
+
+    function resize() {
+      W = canvas.clientWidth || window.innerWidth;
+      H = canvas.clientHeight || window.innerHeight;
+      canvas.width = W * DPR;
+      canvas.height = H * DPR;
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      seed();
+    }
+
+    function seed() {
+      particles = [];
+      for (let i = 0; i < COUNT; i++) {
+        particles.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: (Math.random() - 0.5) * 0.35,
+          vy: (Math.random() - 0.5) * 0.35,
+          r: Math.random() * 1.4 + 0.5,
+        });
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+
+        // 漂移 + 边界回卷
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < -20) p.x = W + 20;
+        if (p.x > W + 20) p.x = -20;
+        if (p.y < -20) p.y = H + 20;
+        if (p.y > H + 20) p.y = -20;
+
+        // 鼠标斥力
+        const dx = p.x - mx;
+        const dy = p.y - my;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 180 && dist > 0) {
+          const force = ((180 - dist) / 180) * 0.45;
+          p.vx += (dx / dist) * force * 0.08;
+          p.vy += (dy / dist) * force * 0.08;
+        }
+
+        // 阻尼
+        p.vx *= 0.998;
+        p.vy *= 0.998;
+
+        // 画点
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${RGB}, ${OPACITY})`;
+        ctx.fill();
+
+        // 与邻近粒子连线
+        for (let j = i + 1; j < particles.length; j++) {
+          const q = particles[j];
+          const d = Math.hypot(p.x - q.x, p.y - q.y);
+          if (d < LINK) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(q.x, q.y);
+            ctx.strokeStyle = `rgba(${RGB}, ${((1 - d / LINK) * 0.13).toFixed(3)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('pointermove', (e) => {
+      mx = e.clientX;
+      my = e.clientY;
+    });
+    window.addEventListener('resize', resize);
+    resize();
+    draw();
+  });
+</script>

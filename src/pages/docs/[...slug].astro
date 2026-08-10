@@ -1,0 +1,51 @@
+---
+// =============================================================================
+// 文档详情页 src/pages/docs/[...slug].astro
+// 这是整个内容体系的"通用渲染模板"：
+//   任何放在 src/content/algorithms/ 或 src/content/open-source/ 下的 .md 文件，
+//   都会自动获得 /docs/<集合>/<文件名> 这样的 URL，并被本模板渲染成排版精美的文章。
+//
+// 新增文章 = 新建 .md 文件，本模板自动接管，无需改动任何代码。
+// =============================================================================
+import DocLayout from '../../layouts/DocLayout.astro';
+import { getCollection, render } from 'astro:content';
+
+// ── 生成静态路径：遍历所有集合，为每篇文章生成一个路由 ──
+export async function getStaticPaths() {
+  const all = [
+    ...(await getCollection('algorithms')),
+    ...(await getCollection('open-source')),
+  ].filter((e) => !e.data.draft);
+
+  return all.map((entry) => ({
+    // slug 形如 "algorithms/01-装甲板识别入门" → 路由 /docs/algorithms/01-装甲板识别入门
+    // （Astro 7 内容层中 id 即文件相对路径去扩展名）
+    params: { slug: `${entry.collection}/${entry.id}` },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+
+// 渲染 Markdown 正文：返回 Content 组件（已带 Shiki 代码高亮）与标题树
+const { Content, headings, remarkPluginFrontmatter } = await render(entry);
+
+// 阅读时长：由 remark-reading-time 插件在渲染期注入到 remarkPluginFrontmatter
+const readingTime = remarkPluginFrontmatter?.readingTime as number | undefined;
+
+// 集合展示名（用于文章头部 eyebrow）
+const collectionLabel =
+  entry.collection === 'algorithms' ? '算法教程 · ALGORITHMS' : '开源项目 · OPEN SOURCE';
+---
+
+<DocLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  author={entry.data.author}
+  date={entry.data.date}
+  readingTime={readingTime}
+  tags={entry.data.tags}
+  collectionLabel={collectionLabel}
+  headings={headings}
+  Content={Content}
+/>
