@@ -14,9 +14,9 @@ export default defineConfig({
   // 【部署必改】GitHub Pages 的站点地址。
   //  - 若部署在 <你的用户名>.github.io           → 写成 https://<用户名>.github.io
   //  - 若部署在 <用户名>.github.io/<仓库名>      → site 写 https://<用户名>.github.io，base 写 '/<仓库名>/'
-  site: 'https://scabbard-cicada.github.io',
+  site: 'https://Hello-World-Vision.github.io',
   // 站点的子路径前缀（仓库名路径）。默认部署在域名根目录即为 '/'。
-  base: '/ZJU_VISION/',
+  base: '/vision-website/',
 
   // 集成插件：astro-icon（基于 Iconify 的图标方案）
   integrations: [

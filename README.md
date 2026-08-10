@@ -1,10 +1,12 @@
-# 浙江大学视觉组（ZJU Vision Group）官方网站
+# Hello World Vision · 官方网站
 
-基于 **Astro 7 + TailwindCSS + Astro Content Collections** 的静态开源网站框架。
+浙江大学 RoboMaster 视觉组（Hello World Vision）官方网站。
+
+基于 **Astro 7 + TailwindCSS + Astro Content Collections** 的静态站点。
 
 > 环境要求：Node ≥ 22.12（本地与 GitHub Actions 均已按此配置）。
 
-> 核心设计理念：**前端高度可定制（Canvas/3D 视觉渲染），内容高度解耦（只写 Markdown 就能更新站点）。**
+> 核心设计理念：**前端高度可定制，内容高度解耦 —— 只写 Markdown 就能更新站点。**
 
 ## 快速开始
 
@@ -15,30 +17,53 @@ npm run build      # 静态打包到 dist/
 npm run check      # 类型检查（astro check）
 ```
 
-## 内容维护（使用者唯一需要关心的部分）
+## 内容维护（成员唯一需要关心的部分）
 
-所有内容都放在 `src/content/` 下，**新增内容只需新建 `.md` 文件**：
+所有文档都放在 `src/content/` 下，**新增文档只需新建一个 `.md` 文件**：
 
 | 目录 | 作用 | 对应页面 |
 | --- | --- | --- |
-| `src/content/algorithms/*.md` | 算法教程 | `/docs/algorithms/<文件名>` |
-| `src/content/open-source/*.md` | 开源项目 | `/docs/open-source/<文件名>` |
-| `src/content/members/*.md` | 团队成员 | `/members` |
+| `src/content/induction/*.md` | 入组培训文档 | `/induction-training`（列表）/ `/induction-training/<文件名>`（详情） |
+| `src/content/pages/*.md` | 顶级静态页面（About / Project） | `/about`、`/project` |
 
-图片统一放在每个 `.md` 文件同级的 `images/` 文件夹中，用相对路径引用即可（封面、正文插图、成员照片均如此）。frontmatter 会被 `src/content/config.ts` 严格校验，写错会直接构建报错。
+### 写一篇培训文档
 
-模板文件可以直接复制使用：
+1. 在 `src/content/induction/` 下新建 `.md` 文件，文件名建议带序号（如 `04-相机标定.md`）以控制排序；
+2. 文件头写 frontmatter，正文用 `##` / `###` 写小标题（会自动生成右侧目录）：
 
-```bash
-cp src/content/algorithms/01-装甲板识别入门.md src/content/algorithms/我的新教程.md
-# 然后编辑 frontmatter 与正文
+```markdown
+---
+title: "相机标定"
+description: "一句话摘要，会展示在列表卡片上。"
+author: "视觉组 · 张三"
+date: 2026-08-10
+tags: ["相机", "标定"]
+draft: false
+---
+
+## 一、为什么需要标定
+...
+
+### 1.1 内参
+...
 ```
 
-## 部署到 GitHub Pages
+3. 保存后 `git add / commit / push`，GitHub Actions 会自动构建并部署。
 
-1. 将仓库推到 GitHub，并把 `astro.config.mjs` 中的 `site`（和需要时的 `base`）改成你的地址；
-2. 仓库 Settings → Pages → Source 选择 **GitHub Actions**；
-3. `push` 到 `main` 分支即自动构建发布（工作流在 `.github/workflows/deploy.yml`）。
+> `draft: true` 的文章不会出现在站点上（适合写一半再发）。
+
+## 全站密码门
+
+全站默认开启前端密码门，进入任何页面需先输入密码。
+
+- 密码定义在 `src/layouts/BaseLayout.astro` 的 `PASSWORD` 常量中，改那里即可。
+- 这是**前端密码门**（非真正安全）：密码会存在于网页源码中，仅用于拦住普通访客。
+
+## 部署
+
+- 仓库：`Hello-World-Vision/vision-website` → 在线地址 **https://Hello-World-Vision.github.io/vision-website/**
+- `push` 到 `main` 分支即自动构建发布（工作流：`.github/workflows/deploy.yml`）。
+- 若更换仓库名，需同步修改 `astro.config.mjs` 中的 `base`（`/<仓库名>/`）。
 
 ## 目录结构
 
@@ -48,24 +73,21 @@ cp src/content/algorithms/01-装甲板识别入门.md src/content/algorithms/我
 ├── tailwind.config.mjs            # ZJU 求是蓝色板、字体、typography 插件
 ├── public/                        # favicon 与全局静态资源
 └── src/
-    ├── content/                   # ★ 内容区（用户唯一需要维护的地方）
-    │   ├── algorithms/            # 算法教程 .md
-    │   ├── open-source/           # 开源项目 .md
-    │   ├── members/               # 团队成员 .md
-    │   └── config.ts              # 内容 schema（严格校验）
+    ├── content/                   # ★ 内容区（成员唯一需要维护的地方）
+    │   ├── induction/             # 入组培训文档 .md
+    │   ├── pages/                 # 顶级页面（about / project）的 .md
+    │   ├── members/               # 团队成员 .md（旧版遗留）
+    │   ├── algorithms/            # 算法教程 .md（旧版遗留）
+    │   ├── open-source/           # 开源项目 .md（旧版遗留）
+    │   └── content.config.ts      # 内容 schema（严格校验）
     ├── pages/                     # 页面路由
-    │   ├── index.astro            # 首页（含 #hero-canvas-container 预留区）
-    │   ├── members.astro          # 成员展示页
-    │   ├── docs/index.astro       # 文档列表
-    │   └── docs/[...slug].astro   # Markdown 通用渲染模板
-    ├── layouts/                   # BaseLayout / DocLayout
-    ├── components/                # Header/Footer/粒子背景/成员卡片等
+    │   ├── index.astro            # 首页（单屏：粒子背景 + 双 Logo + 入口卡片）
+    │   ├── induction-training/    # 入组培训列表 + 文章页
+    │   ├── [...slug].astro        # about / project 通用渲染
+    │   ├── docs/                  # 旧版文档区（遗留）
+    │   └── members.astro          # 旧版成员页（遗留）
+    ├── layouts/                   # BaseLayout（含密码门）/ DocLayout（三栏 + TOC + 滚动高亮）
+    ├── components/                # Header/Footer/粒子背景等
     ├── styles/global.css          # Tailwind 指令 + 关键帧 + 工具类
     └── utils/                     # 阅读时长等 remark 插件
 ```
-
-## 定制视觉
-
-- **首页背景动效**：`src/pages/index.astro` 的 `<div id="hero-canvas-container">` 已预留给 Three.js / Canvas，当前内置原生 Canvas 粒子网络（`components/ParticleCanvas.astro`），直接替换即可。
-- **主题色**：求是蓝 `#003f88` 定义在 `tailwind.config.mjs` 的 `zju` 色板中。
-- **深浅色**：默认深色（极客黑），右上角按钮可切换并记住偏好。
