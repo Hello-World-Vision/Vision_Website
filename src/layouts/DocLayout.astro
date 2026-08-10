@@ -122,7 +122,7 @@ const formattedDate = date
     </div>
 
     <!-- 右侧目录（窄屏自动隐藏，sticky 随页面滚动） -->
-    <aside class="hidden w-64 shrink-0 lg:block">
+    <aside class="hidden w-64 shrink-0 self-stretch lg:block">
       {toc.length > 0 && (
         <div class="sticky top-24 rounded-2xl border border-zinc-200 bg-white/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50 backdrop-blur">
           <p class="eyebrow mb-4 text-zju-400">目录</p>
@@ -157,3 +157,54 @@ const formattedDate = date
     </a>
   </div>
 </BaseLayout>
+
+<style>
+  /* 锚点跳转时给吸顶 Header 让出空间 */
+  article :is(h2, h3, h4) {
+    scroll-margin-top: 7rem;
+  }
+</style>
+
+<script>
+  // ── 目录滚动监听：高亮当前浏览章节 ──────────────────────────
+  const tocLinks = Array.from(
+    document.querySelectorAll<HTMLAnchorElement>('aside nav a[href^="#"]')
+  );
+  const headings = Array.from(
+    document.querySelectorAll<HTMLElement>('article h2, article h3, article h4')
+  );
+
+  if (tocLinks.length && headings.length) {
+    const linkFor = (slug: string) =>
+      tocLinks.find((a) => a.getAttribute('href') === `#${slug}`);
+
+    const setActive = (slug: string | null) => {
+      tocLinks.forEach((a) => {
+        a.style.color = '';
+        a.style.textShadow = '';
+      });
+      if (!slug) return;
+      const link = linkFor(slug);
+      if (link) {
+        link.style.color = '#38bdf8';
+        link.style.textShadow = '0 0 12px rgba(56, 189, 248, 0.7)';
+      }
+    };
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          if (visible[0]) setActive(visible[0].target.id);
+        },
+        { rootMargin: '-80px 0px -70% 0px', threshold: 0 }
+      );
+      headings.forEach((h) => observer.observe(h));
+    }
+
+    // 初始高亮第一个标题
+    setActive(headings[0].id);
+  }
+</script>
