@@ -151,8 +151,6 @@ const induction = defineCollection({
     author: z.string().default('ZJU Vision Group'),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
-    /** 文档状态：done=已完成 / todo=待完成（出现在学习路线中） */
-    status: z.enum(['done', 'todo']).default('done'),
     draft: z.boolean().default(false),
   }),
 });
