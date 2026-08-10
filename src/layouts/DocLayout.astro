@@ -163,7 +163,64 @@ const formattedDate = date
   article :is(h2, h3, h4) {
     scroll-margin-top: 7rem;
   }
+
+  /* Mermaid 图表容器 */
+  .mermaid {
+    margin: 1.5rem auto;
+    padding: 1.5rem 1rem;
+    border-radius: 0.75rem;
+    background: #fff;
+    overflow-x: auto;
+  }
+  html.dark .mermaid {
+    background: #0f172a;
+  }
+  .mermaid svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
 </style>
+
+<script>
+  // ── Mermaid 图表渲染 ─────────────────────────────────────────
+  // 把 ```mermaid 代码块渲染为图表。mermaid 按需动态加载，
+  // 只有页面里真的存在 mermaid 块时才拉取，避免给所有文档页增加体积。
+  (async () => {
+    const pres = Array.from(
+      document.querySelectorAll<HTMLPreElement>(
+        'pre[data-language="mermaid"], pre code.language-mermaid'
+      )
+    );
+    if (!pres.length) return;
+
+    const nodes = pres.map((pre) => {
+      const code = pre.querySelector('code');
+      const div = document.createElement('div');
+      div.className = 'mermaid';
+      div.textContent = code?.textContent ?? '';
+      pre.replaceWith(div);
+      return div;
+    });
+
+    try {
+      const { default: mermaid } = await import('mermaid');
+      const isDark = document.documentElement.classList.contains('dark');
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDark ? 'dark' : 'default',
+        securityLevel: 'loose',
+      });
+      const results = await mermaid.run({ nodes });
+      results.forEach((r, i) => {
+        if (r && r.error) console.warn('Mermaid 渲染失败:', r.error);
+      });
+    } catch (err) {
+      console.warn('Mermaid 加载失败:', err);
+    }
+  })();
+</script>
 
 <script>
   // ── 目录滚动监听：高亮当前浏览章节 ──────────────────────────
