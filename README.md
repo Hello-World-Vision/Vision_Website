@@ -61,7 +61,7 @@ draft: false
 
 ## 部署
 
-- 仓库：`Hello-World-Vision/vision-website` → 在线地址 **https://Hello-World-Vision.github.io/vision-website/**
+- 仓库：`Hello-World-Vision/Vision_Website` → 在线地址 **https://Hello-World-Vision.github.io/Vision_Website/**
 - `push` 到 `main` 分支即自动构建发布（工作流：`.github/workflows/deploy.yml`）。
 - 若更换仓库名，需同步修改 `astro.config.mjs` 中的 `base`（`/<仓库名>/`）。
 
