@@ -62,62 +62,68 @@ const formattedDate = date
 ---
 
 <BaseLayout title={title} description={description}>
-  <!-- 文章主体：窄栏居中 + 右侧目录 -->
-  <div class="container-page grid gap-10 py-16 lg:grid-cols-[1fr_240px]">
-    <article>
-      <!-- ── 文章头部信息 ─────────────────────────────────── -->
-      <header class="mb-10 border-b border-zinc-200 pb-8 dark:border-zinc-800">
-        {collectionLabel && <p class="eyebrow mb-4 text-zju-400">{collectionLabel}</p>}
-        <h1 class="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
-          {title}
-        </h1>
-        <p class="mt-4 text-base leading-relaxed text-zinc-600 dark:text-zinc-400">
-          {description}
-        </p>
+  <!-- 文章主体：左占位 + 中间正文（绝对居中）+ 右侧目录 -->
+  <div class="mx-auto flex w-full max-w-[90rem] items-start justify-center gap-8 px-4 py-16 sm:px-6 md:px-8">
+    <!-- 左占位：平衡右侧目录宽度（未来可放侧边导航） -->
+    <div class="hidden w-64 shrink-0 lg:block" aria-hidden="true"></div>
 
-        <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
-          {author && (
-            <span class="flex items-center gap-1.5">
-              <Icon name="mdi:account" class="h-4 w-4 text-zju-400" />
-              {author}
-            </span>
-          )}
-          {formattedDate && (
-            <time class="flex items-center gap-1.5">
-              <Icon name="mdi:calendar-blank-outline" class="h-4 w-4 text-zju-400" />
-              {formattedDate}
-            </time>
-          )}
-          {readingTime && (
-            <span class="flex items-center gap-1.5">
-              <Icon name="mdi:clock-outline" class="h-4 w-4 text-zju-400" />
-              约 {readingTime} 分钟
-            </span>
-          )}
-        </div>
+    <!-- 中间正文：限定阅读宽度，绝对居中 -->
+    <div class="min-w-0 w-full max-w-3xl xl:max-w-4xl">
+      <article>
+        <!-- ── 文章头部信息 ─────────────────────────────────── -->
+        <header class="mb-10 border-b border-zinc-200 pb-8 dark:border-zinc-800">
+          {collectionLabel && <p class="eyebrow mb-4 text-zju-400">{collectionLabel}</p>}
+          <h1 class="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+            {title}
+          </h1>
+          <p class="mt-4 text-base leading-relaxed text-zinc-600 dark:text-zinc-400">
+            {description}
+          </p>
 
-        {tags.length > 0 && (
-          <div class="mt-4 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span
-                class="rounded-full border border-zinc-300 px-3 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
-              >
-                #{tag}
+          <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
+            {author && (
+              <span class="flex items-center gap-1.5">
+                <Icon name="mdi:account" class="h-4 w-4 text-zju-400" />
+                {author}
               </span>
-            ))}
+            )}
+            {formattedDate && (
+              <time class="flex items-center gap-1.5">
+                <Icon name="mdi:calendar-blank-outline" class="h-4 w-4 text-zju-400" />
+                {formattedDate}
+              </time>
+            )}
+            {readingTime && (
+              <span class="flex items-center gap-1.5">
+                <Icon name="mdi:clock-outline" class="h-4 w-4 text-zju-400" />
+                约 {readingTime} 分钟
+              </span>
+            )}
           </div>
-        )}
-      </header>
 
-      <!-- ── 正文：prose 排版（H1~H6/Blockquote/Table/代码块全部生效）── -->
-      <div class="prose prose-zinc max-w-none dark:prose-invert dark:prose-headings:text-zinc-100 prose-a:text-zju-500 dark:prose-a:text-zju-300 prose-pre:border prose-pre:border-zinc-700 prose-pre:bg-zinc-900">
-        <Content />
-      </div>
-    </article>
+          {tags.length > 0 && (
+            <div class="mt-4 flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span
+                  class="rounded-full border border-zinc-300 px-3 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </header>
 
-    <!-- ── 右侧目录（窄屏自动隐藏）────────────────────────── -->
-    {toc.length > 0 && (
-      <aside class="hidden lg:block">
+        <!-- ── 正文：prose 排版（H1~H6/Blockquote/Table/代码块全部生效）── -->
+        <div class="prose prose-zinc max-w-none dark:prose-invert dark:prose-headings:text-zinc-100 prose-a:text-zju-500 dark:prose-a:text-zju-300 prose-pre:border prose-pre:border-zinc-700 prose-pre:bg-zinc-900">
+          <Content />
+        </div>
+      </article>
+    </div>
+
+    <!-- 右侧目录（窄屏自动隐藏，sticky 随页面滚动） -->
+    <aside class="hidden w-64 shrink-0 lg:block">
+      {toc.length > 0 && (
         <div class="sticky top-24 rounded-2xl border border-zinc-200 bg-white/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50 backdrop-blur">
           <p class="eyebrow mb-4 text-zju-400">目录</p>
           <nav class="space-y-2 text-sm">
@@ -136,8 +142,8 @@ const formattedDate = date
             ))}
           </nav>
         </div>
-      </aside>
-    )}
+      )}
+    </aside>
   </div>
 
   <!-- 返回列表按钮 -->
