@@ -1,0 +1,39 @@
+---
+// =============================================================================
+// 顶级路由页 src/pages/[...slug].astro
+// 将 src/content/pages/ 下的 Markdown 文件渲染为顶级路由页面：
+//   src/content/pages/about.md           → /about
+//   src/content/pages/project.md         → /project
+//   src/content/pages/induction-training.md → /induction-training
+// 新增页面 = 在 src/content/pages/ 新建 .md 文件，无需改动任何代码。
+// =============================================================================
+import DocLayout from '../layouts/DocLayout.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const pages = (await getCollection('pages')).filter((e) => !e.data.draft);
+
+  return pages.map((entry) => ({
+    // id 即文件名去扩展名，作为顶级路由
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+
+const { Content, headings, remarkPluginFrontmatter } = await render(entry);
+
+const readingTime = remarkPluginFrontmatter?.readingTime as number | undefined;
+---
+
+<DocLayout
+  title={entry.data.title}
+  description={entry.data.description}
+  author={entry.data.author}
+  date={entry.data.date}
+  readingTime={readingTime}
+  tags={entry.data.tags}
+  headings={headings}
+  Content={Content}
+/>

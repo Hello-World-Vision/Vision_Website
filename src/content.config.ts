@@ -121,5 +121,22 @@ const members = defineCollection({
     }),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 4) 独立页面集合
+//    顶级路由（如 /about、/project、/induction-training）对应的 Markdown 页面。
+//    文件名（去扩展名）即 URL 路径，由 src/pages/[...slug].astro 统一渲染。
+// ─────────────────────────────────────────────────────────────────────────────
+const pages = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/pages' }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    author: z.string().default('ZJU Vision Group'),
+    date: z.coerce.date(),
+    tags: z.array(z.string()).default([]),
+    draft: z.boolean().default(false),
+  }),
+});
+
 // 注册所有集合 —— 集合 key 必须与 src/content/ 下的文件夹名一致
-export const collections = { algorithms, 'open-source': openSource, members };
+export const collections = { algorithms, 'open-source': openSource, members, pages };
