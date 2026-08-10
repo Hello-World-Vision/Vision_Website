@@ -94,11 +94,18 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <Header />
 
     <!-- 页面主体：子页面内容渲染位置 -->
-    <main class:list={['relative z-10', singleScreen && 'flex flex-1 flex-col']}>
+    <main class="relative z-10">
       <slot />
     </main>
 
-    <!-- 页脚 -->
-    {!hideFooter && <Footer />}
+    <!-- 页脚：单屏模式下悬浮在首屏底部，不占用文档流高度 -->
+    {!hideFooter &&
+      (singleScreen ? (
+        <div class="absolute inset-x-0 bottom-0 z-20 bg-zinc-950/60 backdrop-blur-md">
+          <Footer />
+        </div>
+      ) : (
+        <Footer />
+      ))}
   </body>
 </html>
