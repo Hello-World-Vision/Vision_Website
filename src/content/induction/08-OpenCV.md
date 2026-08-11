@@ -4,7 +4,7 @@ description: "面向 RoboMaster 视觉组新成员的 OpenCV 与传统计算机�
 author: "视觉组"
 date: 2026-08-10
 tags: ["OpenCV", "图像处理", "传统视觉", "RoboMaster"]
-status: todo
+status: done
 draft: false
 ---
 
