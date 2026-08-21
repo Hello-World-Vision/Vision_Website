@@ -12,6 +12,7 @@
 // =============================================================================
 import BaseLayout from './BaseLayout.astro';
 import { Icon } from 'astro-icon/components';
+import 'katex/dist/katex.min.css';
 
 interface Heading {
   depth: number;
@@ -162,6 +163,15 @@ const formattedDate = date
   /* 锚点跳转时给吸顶 Header 让出空间 */
   article :is(h2, h3, h4) {
     scroll-margin-top: 7rem;
+  }
+
+  /* 正文图片：缩放到 60% 并居中显示。
+     :global() 是因为正文由 <Content /> 渲染，元素不带本组件的 scoped 属性。 */
+  :global(article .prose img) {
+    max-width: 60%;
+    height: auto;
+    display: block;
+    margin: 1.5rem auto;
   }
 
   /* Mermaid 图表容器 */

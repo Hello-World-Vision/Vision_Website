@@ -6,6 +6,8 @@ import icon from 'astro-icon';
 // （来自 @astrojs/markdown-remark，已作为依赖安装）。
 import { unified } from '@astrojs/markdown-remark';
 import { remarkReadingTime } from './src/utils/remark-reading-time.mjs';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Astro 站点主配置
@@ -38,6 +40,10 @@ export default defineConfig({
     },
     // Astro 7：选用 unified()（remark/rehype）处理器，并注册阅读时长插件。
     // 该插件的计算结果经 render(entry).remarkPluginFrontmatter.readingTime 读取。
-    processor: unified({ remarkPlugins: [remarkReadingTime] }),
+    // remark-math + rehype-katex：把正文中的 $...$ / $$...$$ 渲染为 LaTeX 公式。
+    processor: unified({
+      remarkPlugins: [remarkReadingTime, remarkMath],
+      rehypePlugins: [rehypeKatex],
+    }),
   },
 });

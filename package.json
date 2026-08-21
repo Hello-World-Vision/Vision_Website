@@ -20,7 +20,10 @@
     "@iconify-json/mdi": "^1.2.3",
     "astro": "^7.2.0",
     "astro-icon": "^1.1.5",
-    "mermaid": "^11.16.1"
+    "katex": "^0.18.4",
+    "mermaid": "^11.16.1",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
