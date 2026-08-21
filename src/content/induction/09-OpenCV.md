@@ -56,7 +56,7 @@ pkg-config --cflags --libs opencv4
 
 如果第一条命令能够输出类似 `4.x.x` 的版本号，说明基础安装已经完成。Ubuntu 软件源中的 OpenCV 版本可能落后于官方最新版本，但对于本文涉及的 `Mat`、`cvtColor`、`threshold`、`findContours`、`minAreaRect` 等基础内容通常足够使用。
 
-如果你确实需要指定版本、`opencv_contrib`、特殊编译选项，或者希望自己控制 CUDA / GUI / codec 等依赖，再按照上面的 **Linux 官方安装教程**从源码使用 CMake 构建。新人阶段没有明确需求时，不建议一开始就自行编译整套 OpenCV。
+如果你确实需要指定版本、`opencv_contrib`、特殊编译选项，或者希望自己控制 CUDA / GUI / codec 等依赖，再按照上面的 **Linux 官方安装教程** 从源码使用 CMake 构建。新人阶段没有明确需求时，不建议一开始就自行编译整套 OpenCV。
 
 ---
 
