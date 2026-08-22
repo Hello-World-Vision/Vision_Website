@@ -2,7 +2,7 @@
 // =============================================================================
 // 入组培训总览页 src/pages/induction-training/index.astro（路由：/induction-training）
 // 结构：
-//   1. 学习路线（Roadmap）：按文件名顺序展示全部文档，已完成可点击，待完成置灰
+//   1. 学习路线（Roadmap）：按文件名顺序展示全部文档，草稿置灰不可点击，待完成以橙色提示可点击
 //   2. 待完成文档（Todo）：列出 status: todo 的占位文档
 //   3. 文档列表：已发布的全部文档卡片
 // 新增文档 = 在 src/content/induction/ 下新建 .md 文件即可，此处自动出现。
@@ -11,16 +11,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { Icon } from 'astro-icon/components';
 import { getCollection } from 'astro:content';
 
-// 全部文档（含草稿/待完成），按文件名排序即学习顺序
+// 全部文档（含草稿），按文件名排序即学习顺序
 const all = (await getCollection('induction')).sort((a, b) =>
   a.id.localeCompare(b.id, 'zh-CN', { numeric: true })
 );
 
 // 已发布（非草稿）的文档卡片列表
-const docs = all.filter((e) => !e.data.draft);
+const published = all.filter((e) => !e.data.draft);
 
-// 待完成文档（status: todo）
-const todo = all.filter((e) => e.data.status === 'todo');
+// 待完成文档（status: todo，且非草稿）
+const todo = all.filter((e) => e.data.status === 'todo' && !e.data.draft);
 
 const base = import.meta.env.BASE_URL;
 
@@ -62,33 +62,45 @@ const fmtDate = (d: Date) =>
 
       <ol class="space-y-3">
         {all.map((doc, i) => {
-          const isTodo = doc.data.status === 'todo';
+          const isDraft = doc.data.draft === true;
+          const isTodo = doc.data.status === 'todo' && !isDraft;
           return (
             <li class="flex items-center gap-3">
               <span
                 class:list={[
                   'grid h-9 w-9 shrink-0 place-items-center rounded-lg border font-mono text-xs font-bold',
-                  isTodo
+                  isDraft
                     ? 'border-zinc-700 bg-white/5 text-zinc-500'
-                    : 'border-sky-400/40 bg-sky-400/10 text-sky-300',
+                    : isTodo
+                      ? 'border-orange-500/50 bg-orange-400/10 text-orange-400'
+                      : 'border-sky-400/40 bg-sky-400/10 text-sky-300',
                 ]}
               >
                 {String(i + 1).padStart(2, '0')}
               </span>
 
-              {isTodo ? (
+              {isDraft ? (
                 <span class="font-medium text-zinc-500">{doc.data.title}</span>
               ) : (
                 <a
                   href={`${base}induction-training/${doc.id}`}
-                  class="font-medium text-zinc-200 transition-colors hover:text-sky-300"
+                  class:list={[
+                    'font-medium transition-colors',
+                    isTodo
+                      ? 'text-orange-400 hover:text-orange-300'
+                      : 'text-zinc-200 hover:text-sky-300',
+                  ]}
                 >
                   {doc.data.title}
                 </a>
               )}
 
-              {isTodo ? (
+              {isDraft ? (
                 <span class="ml-auto rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-500">
+                  草稿
+                </span>
+              ) : isTodo ? (
+                <span class="ml-auto rounded-full border border-orange-500/50 bg-orange-400/10 px-2.5 py-0.5 text-xs text-orange-400">
                   待完成
                 </span>
               ) : (
@@ -115,9 +127,14 @@ const fmtDate = (d: Date) =>
 
         <ul class="grid gap-3 sm:grid-cols-2">
           {todo.map((doc) => (
-            <li class="rounded-xl border border-dashed border-zinc-700 bg-white/[0.02] px-4 py-3">
-              <p class="text-sm font-medium text-zinc-400">{doc.data.title}</p>
-              <p class="mt-1 text-xs text-zinc-600">{doc.data.description}</p>
+            <li>
+              <a
+                href={`${base}induction-training/${doc.id}`}
+                class="block rounded-xl border border-dashed border-orange-500/40 bg-orange-400/[0.03] px-4 py-3 transition-colors hover:border-orange-500/70 hover:bg-orange-400/[0.07]"
+              >
+                <p class="text-sm font-medium text-orange-400">{doc.data.title}</p>
+                <p class="mt-1 text-xs text-zinc-500">{doc.data.description}</p>
+              </a>
             </li>
           ))}
         </ul>
@@ -125,7 +142,7 @@ const fmtDate = (d: Date) =>
     )}
 
     <!-- 3. 文档列表 -->
-    {docs.length > 0 && (
+    {published.length > 0 && (
       <section>
         <div class="mb-6 flex items-center gap-3">
           <span class="grid h-10 w-10 place-items-center rounded-xl bg-zju-900/10 text-sky-500 dark:bg-sky-400/10">
@@ -135,29 +152,45 @@ const fmtDate = (d: Date) =>
         </div>
 
         <ul class="grid gap-4 md:grid-cols-2">
-          {docs.map((doc) => (
-            <li>
-              <a href={`${base}induction-training/${doc.id}`} class="tech-card block p-5">
-                <div class="flex items-start justify-between gap-3">
-                  <h3 class="text-lg font-bold">{doc.data.title}</h3>
-                  <Icon name="mdi:arrow-right" class="mt-1 h-4 w-4 shrink-0 text-zju-400" />
-                </div>
-                <p class="mt-2 line-clamp-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-                  {doc.data.description}
-                </p>
-                <div class="mt-4 flex flex-wrap items-center gap-3 font-mono text-xs text-zinc-500">
-                  <time>{fmtDate(doc.data.date)}</time>
-                  <span>·</span>
-                  <span>{doc.data.author}</span>
-                  {doc.data.tags?.slice(0, 3).map((tag) => (
-                    <span class="rounded-full border border-zinc-300 px-2 py-0.5 dark:border-zinc-700">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </a>
-            </li>
-          ))}
+          {published.map((doc) => {
+            const isTodo = doc.data.status === 'todo';
+            return (
+              <li>
+                <a
+                  href={`${base}induction-training/${doc.id}`}
+                  class:list={[
+                    'tech-card block p-5',
+                    isTodo && 'border-orange-500/30 hover:border-orange-500/60',
+                  ]}
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <h3 class="text-lg font-bold">{doc.data.title}</h3>
+                    <div class="flex shrink-0 items-center gap-2">
+                      {isTodo && (
+                        <span class="rounded-full border border-orange-500/50 bg-orange-400/10 px-2 py-0.5 text-xs text-orange-400">
+                          待完成
+                        </span>
+                      )}
+                      <Icon name="mdi:arrow-right" class="mt-1 h-4 w-4 shrink-0 text-zju-400" />
+                    </div>
+                  </div>
+                  <p class="mt-2 line-clamp-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+                    {doc.data.description}
+                  </p>
+                  <div class="mt-4 flex flex-wrap items-center gap-3 font-mono text-xs text-zinc-500">
+                    <time>{fmtDate(doc.data.date)}</time>
+                    <span>·</span>
+                    <span>{doc.data.author}</span>
+                    {doc.data.tags?.slice(0, 3).map((tag) => (
+                      <span class="rounded-full border border-zinc-300 px-2 py-0.5 dark:border-zinc-700">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </section>
     )}
