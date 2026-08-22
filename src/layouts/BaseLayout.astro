@@ -27,14 +27,16 @@ interface Props {
 }
 
 const {
-  title = '浙江大学 RoboMaster Vision',
+  title = 'Zhejiang University RoboMaster Vision',
   description = '浙江大学 RoboMaster 视觉组 —— 用视觉重新定义战场。',
   hideFooter = false,
   singleScreen = false,
 } = Astro.props;
 
 const pageTitle =
-  title === '浙江大学 RoboMaster Vision' ? title : `${title} · 浙江大学 RoboMaster Vision`;
+  title === 'Zhejiang University RoboMaster Vision'
+    ? title
+    : `${title} · Zhejiang University RoboMaster Vision`;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 ---
 
