@@ -5,7 +5,7 @@ author: "视觉组"
 date: 2026-08-10
 tags: ["C++", "OOP"]
 status: todo
-draft: true
+draft: false
 ---
 
 > OOP 不是面向对象编程，而是 *O牛批这是OP写的文档*（x
