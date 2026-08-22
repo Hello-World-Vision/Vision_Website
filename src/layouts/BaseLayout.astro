@@ -81,7 +81,7 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 
   <body
     class:list={[
-      'relative min-h-screen overflow-x-hidden',
+      'relative min-h-screen overflow-x-clip',
       singleScreen && 'flex flex-col overflow-hidden',
     ]}
   >
