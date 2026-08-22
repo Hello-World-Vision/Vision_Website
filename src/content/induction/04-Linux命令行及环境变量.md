@@ -1,7 +1,7 @@
 ---
 title: "Linux 命令行及环境变量"
 description: "Linux 常用命令行工具与 shell 环境变量的使用方法。"
-author: "视觉组"
+author: "Cicada"
 date: 2026-08-10
 tags: ["Linux", "命令行", "环境变量"]
 status: done

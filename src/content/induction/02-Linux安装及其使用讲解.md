@@ -1,7 +1,7 @@
 ---
 title: "Linux 安装与环境部署讲解"
 description: "Ubuntu 双系统安装与环境部署的核心思路与外部资料导航 —— 学习资料、BIOS 操作、分区、Secure Boot、高频避坑与显卡驱动。"
-author: "视觉组"
+author: "Cicada"
 date: 2026-08-10
 tags: ["Linux", "Ubuntu", "环境配置", "双系统"]
 status: done

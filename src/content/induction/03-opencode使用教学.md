@@ -1,7 +1,7 @@
 ---
 title: "OpenCode 使用教学"
 description: "OpenCode (AI Agent) 辅助开发标准操作规范 —— 工程定位、无效沟通规避与强制使用纪律。"
-author: "视觉组"
+author: "Cicada"
 date: 2026-08-10
 tags: ["OpenCode", "AI Agent", "开发规范"]
 status: done

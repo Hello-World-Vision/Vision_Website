@@ -1,7 +1,7 @@
 ---
 title: "工业相机使用、参数说明、MVS配置与SDK"
 description: "工业相机与镜头的硬件基础、相机关键参数、MVS 连接操作，以及 SDK 是什么、拿到 SDK 后怎么调用。"
-author: "视觉组"
+author: "Cicada"
 date: 2026-08-10
 tags: ["工业相机", "MVS", "SDK", "镜头", "RoboMaster"]
 status: done

@@ -1,7 +1,7 @@
 ---
 title: "OpenCV 传统视觉"
 description: "面向 RoboMaster 视觉组新成员的 OpenCV 与传统计算机视觉入门 —— 从基本数据结构、图像处理 API 到灯条与装甲板二维检测。"
-author: "视觉组"
+author: "HH"
 date: 2026-08-10
 tags: ["OpenCV", "图像处理", "传统视觉", "RoboMaster"]
 status: done
