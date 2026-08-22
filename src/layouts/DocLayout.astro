@@ -952,7 +952,9 @@ const formattedDate = date
         range,
         y: rect.top + window.scrollY,
       };
-      showToolbar(rect.left + rect.width / 2, rect.top + window.scrollY, text);
+      // 注意：工具栏是 fixed 定位，必须传视口坐标 rect.top，
+      // 如果传 rect.top + scrollY 会在页面滚动后跑到屏幕外
+      showToolbar(rect.left + rect.width / 2, rect.top, text);
     });
 
     // 点击空白处隐藏工具栏
