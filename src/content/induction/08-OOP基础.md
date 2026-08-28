@@ -4,7 +4,7 @@ description: "面向对象编程基础：类、封装、继承、多态。"
 author: "XiMiLu"
 date: 2026-08-10
 tags: ["C++", "OOP"]
-status: todo
+status: done
 draft: false
 ---
 
@@ -700,5 +700,3 @@ animal2 -> Cat对象
 
 程序在运行时根据实际对象类型决定调用哪个函数，这种方式称为**运行时多态（Runtime Polymorphism）**。
 
-
-## 7. 一个小练习（没构思完）
