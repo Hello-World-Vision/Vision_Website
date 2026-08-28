@@ -36,4 +36,5 @@ const readingTime = remarkPluginFrontmatter?.readingTime as number | undefined;
   tags={entry.data.tags}
   headings={headings}
   Content={Content}
+  lock={entry.id === 'project'}
 />

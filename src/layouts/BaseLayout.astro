@@ -24,6 +24,8 @@ interface Props {
   hideFooter?: boolean;
   /** 单屏模式：锁死 100vh，不允许滚动，Header/主体/Footer 刚好适配一屏 */
   singleScreen?: boolean;
+  /** 是否启用密码门（仅此页面需要密码才能访问） */
+  lock?: boolean;
 }
 
 const {
@@ -31,6 +33,7 @@ const {
   description = '浙江大学 RoboMaster 视觉组 —— 用视觉重新定义战场。',
   hideFooter = false,
   singleScreen = false,
+  lock = false,
 } = Astro.props;
 
 const pageTitle =
@@ -68,17 +71,19 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     </script>
 
     <!-- 密码门：已在本会话解锁过则隐藏锁屏（避免刷新后闪屏） -->
-    <script is:inline>
-      (function () {
-        try {
-          if (sessionStorage.getItem('zju-auth') === 'ok') {
-            var s = document.createElement('style');
-            s.textContent = '#site-lock{display:none !important}';
-            document.head.appendChild(s);
-          }
-        } catch (_) {}
-      })();
-    </script>
+    {lock && (
+      <script is:inline>
+        (function () {
+          try {
+            if (sessionStorage.getItem('zju-auth') === 'ok') {
+              var s = document.createElement('style');
+              s.textContent = '#site-lock{display:none !important}';
+              document.head.appendChild(s);
+            }
+          } catch (_) {}
+        })();
+      </script>
+    )}
   </head>
 
   <body
@@ -87,35 +92,37 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
       singleScreen && 'flex flex-col overflow-hidden',
     ]}
   >
-    <!-- 密码门遮罩：未解锁时覆盖全站 -->
-    <div
-      id="site-lock"
-      class="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-zinc-950 px-6"
-    >
-      <p class="font-mono text-3xl font-black tracking-[0.15em] text-white sm:text-4xl">
-        ZJU RoboMaster Vision
-      </p>
-      <p class="font-mono text-sm text-zinc-400">请输入访问密码以继续</p>
-      <form id="site-lock-form" class="flex items-center gap-3">
-        <input
-          id="site-lock-input"
-          type="password"
-          placeholder="Password"
-          autocomplete="off"
-          autofocus
-          class="rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-sky-400"
-        />
-        <button
-          type="submit"
-          class="rounded-lg bg-sky-500 px-5 py-2 font-mono text-sm font-semibold text-white transition-colors hover:bg-sky-400"
-        >
-          进入
-        </button>
-      </form>
-      <p id="site-lock-msg" class="hidden font-mono text-xs text-red-400">
-        密码错误，请重试
-      </p>
-    </div>
+    <!-- 密码门遮罩：未解锁时覆盖全站（仅 lock 页面启用） -->
+    {lock && (
+      <div
+        id="site-lock"
+        class="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-zinc-950 px-6"
+      >
+        <p class="font-mono text-3xl font-black tracking-[0.15em] text-white sm:text-4xl">
+          ZJU RoboMaster Vision
+        </p>
+        <p class="font-mono text-sm text-zinc-400">请输入访问密码以继续</p>
+        <form id="site-lock-form" class="flex items-center gap-3">
+          <input
+            id="site-lock-input"
+            type="password"
+            placeholder="Password"
+            autocomplete="off"
+            autofocus
+            class="rounded-lg border border-white/10 bg-white/5 px-4 py-2 font-mono text-sm text-white outline-none transition-colors focus:border-sky-400"
+          />
+          <button
+            type="submit"
+            class="rounded-lg bg-sky-500 px-5 py-2 font-mono text-sm font-semibold text-white transition-colors hover:bg-sky-400"
+          >
+            进入
+          </button>
+        </form>
+        <p id="site-lock-msg" class="hidden font-mono text-xs text-red-400">
+          密码错误，请重试
+        </p>
+      </div>
+    )}
 
     <!--
       全站固定背景层：三团"求是蓝/科技蓝"光晕 + 淡网格，营造空间纵深感。
@@ -156,105 +163,107 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
       ))}
   </body>
 
-  <!-- 密码门解锁逻辑 -->
-  <script is:inline>
-    (function () {
-      // 明文密码不出现在源码中。这里只保存 PBKDF2 加盐哈希，
-      // 即使用仓库公开，也无法直接读出密码，暴力破解需大量计算。
-      var SALT = 'fc5e06f784fc4a8b4ae99f651c31056b';
-      var HASH = '0fb97a50ee2e07b21c510228c83fe25025af93ee2d6b491d958683cabbb11309';
-      var ITERATIONS = 250000;
+  <!-- 密码门解锁逻辑（仅 lock 页面启用） -->
+  {lock && (
+    <script is:inline>
+      (function () {
+        // 明文密码不出现在源码中。这里只保存 PBKDF2 加盐哈希，
+        // 即使用仓库公开，也无法直接读出密码，暴力破解需大量计算。
+        var SALT = 'fc5e06f784fc4a8b4ae99f651c31056b';
+        var HASH = '0fb97a50ee2e07b21c510228c83fe25025af93ee2d6b491d958683cabbb11309';
+        var ITERATIONS = 250000;
 
-      var lock = document.getElementById('site-lock');
-      if (!lock) return;
-      if (sessionStorage.getItem('zju-auth') === 'ok') {
-        lock.style.display = 'none';
-        return;
-      }
-
-      // Web Crypto 的 PBKDF2 需要 https（GitHub Pages 满足）或 localhost
-      if (!window.crypto || !window.crypto.subtle) {
-        var noSupport = document.createElement('p');
-        noSupport.className = 'font-mono text-xs text-red-400';
-        noSupport.textContent = '当前环境不支持安全校验，请使用 HTTPS 访问';
-        lock.appendChild(noSupport);
-        return;
-      }
-
-      var enc = new TextEncoder();
-      var saltBytes = hexToBytes(SALT);
-
-      function hexToBytes(hex) {
-        var bytes = new Uint8Array(hex.length / 2);
-        for (var i = 0; i < bytes.length; i++) {
-          bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-        }
-        return bytes;
-      }
-
-      function bytesToHex(bytes) {
-        var hex = '';
-        for (var i = 0; i < bytes.length; i++) {
-          hex += bytes[i].toString(16).padStart(2, '0');
-        }
-        return hex;
-      }
-
-      async function derive(input) {
-        var key = await crypto.subtle.importKey(
-          'raw',
-          enc.encode(input),
-          'PBKDF2',
-          false,
-          ['deriveBits']
-        );
-        var bits = await crypto.subtle.deriveBits(
-          { name: 'PBKDF2', salt: saltBytes, iterations: ITERATIONS, hash: 'SHA-256' },
-          key,
-          256
-        );
-        return bytesToHex(new Uint8Array(bits));
-      }
-
-      var form = document.getElementById('site-lock-form');
-      var input = document.getElementById('site-lock-input');
-      var msg = document.getElementById('site-lock-msg');
-
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var entered = input.value;
-        // 先做一次廉价校验，完全为空时直接报错，避免无谓的耗时
-        if (!entered) {
-          msg.classList.remove('hidden');
+        var lock = document.getElementById('site-lock');
+        if (!lock) return;
+        if (sessionStorage.getItem('zju-auth') === 'ok') {
+          lock.style.display = 'none';
           return;
         }
-        derive(entered).then(function (digest) {
-          var ok = false;
-          try {
-            // 恒定时间比较，避免时序侧信道
-            var a = digest;
-            var b = HASH;
-            ok = a.length === b.length;
-            if (ok) {
-              var diff = 0;
-              for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-              ok = diff === 0;
-            }
-          } catch (_) {
-            ok = false;
+
+        // Web Crypto 的 PBKDF2 需要 https（GitHub Pages 满足）或 localhost
+        if (!window.crypto || !window.crypto.subtle) {
+          var noSupport = document.createElement('p');
+          noSupport.className = 'font-mono text-xs text-red-400';
+          noSupport.textContent = '当前环境不支持安全校验，请使用 HTTPS 访问';
+          lock.appendChild(noSupport);
+          return;
+        }
+
+        var enc = new TextEncoder();
+        var saltBytes = hexToBytes(SALT);
+
+        function hexToBytes(hex) {
+          var bytes = new Uint8Array(hex.length / 2);
+          for (var i = 0; i < bytes.length; i++) {
+            bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
           }
-          if (ok) {
-            try {
-              sessionStorage.setItem('zju-auth', 'ok');
-            } catch (_) {}
-            lock.style.display = 'none';
-          } else {
+          return bytes;
+        }
+
+        function bytesToHex(bytes) {
+          var hex = '';
+          for (var i = 0; i < bytes.length; i++) {
+            hex += bytes[i].toString(16).padStart(2, '0');
+          }
+          return hex;
+        }
+
+        async function derive(input) {
+          var key = await crypto.subtle.importKey(
+            'raw',
+            enc.encode(input),
+            'PBKDF2',
+            false,
+            ['deriveBits']
+          );
+          var bits = await crypto.subtle.deriveBits(
+            { name: 'PBKDF2', salt: saltBytes, iterations: ITERATIONS, hash: 'SHA-256' },
+            key,
+            256
+          );
+          return bytesToHex(new Uint8Array(bits));
+        }
+
+        var form = document.getElementById('site-lock-form');
+        var input = document.getElementById('site-lock-input');
+        var msg = document.getElementById('site-lock-msg');
+
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var entered = input.value;
+          // 先做一次廉价校验，完全为空时直接报错，避免无谓的耗时
+          if (!entered) {
             msg.classList.remove('hidden');
-            input.value = '';
-            input.select();
+            return;
           }
+          derive(entered).then(function (digest) {
+            var ok = false;
+            try {
+              // 恒定时间比较，避免时序侧信道
+              var a = digest;
+              var b = HASH;
+              ok = a.length === b.length;
+              if (ok) {
+                var diff = 0;
+                for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+                ok = diff === 0;
+              }
+            } catch (_) {
+              ok = false;
+            }
+            if (ok) {
+              try {
+                sessionStorage.setItem('zju-auth', 'ok');
+              } catch (_) {}
+              lock.style.display = 'none';
+            } else {
+              msg.classList.remove('hidden');
+              input.value = '';
+              input.select();
+            }
+          });
         });
-      });
-    })();
-  </script>
+      })();
+    </script>
+  )}
 </html>

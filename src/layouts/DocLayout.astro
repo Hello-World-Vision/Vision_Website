@@ -36,6 +36,8 @@ interface Props {
   backHref?: string;
   /** 返回列表按钮文案（默认"返回全部文档"） */
   backLabel?: string;
+  /** 是否启用密码门（仅此页面需要密码才能访问） */
+  lock?: boolean;
 }
 
 const base = import.meta.env.BASE_URL;
@@ -52,6 +54,7 @@ const {
   headings = [],
   backHref = `${base}docs`,
   backLabel = '返回全部文档',
+  lock = false,
 } = Astro.props;
 
 // 取深度 2~4 的标题作为目录项
@@ -62,7 +65,7 @@ const formattedDate = date
   : '';
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} lock={lock}>
   <!-- 文章主体：左占位 + 中间正文（绝对居中）+ 右侧目录 -->
   <div class="mx-auto flex w-full max-w-[100rem] items-start justify-center gap-8 px-4 py-16 sm:px-6 md:px-8">
     <!-- 左侧批注栏 -->
