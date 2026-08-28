@@ -16,7 +16,6 @@ import { glob } from 'astro/loaders';
  *
  *   src/content/algorithms/   → 算法教程（页面路由：/docs/algorithms/<文件名>）
  *   src/content/open-source/  → 开源项目（页面路由：/docs/open-source/<文件名>）
- *   src/content/members/      → 团队成员（页面路由：/members 下自动渲染）
  *
  * 每篇文章的 frontmatter 都会经过下方 z.object() 的严格校验，
  * 一旦字段缺失/类型错误，构建会直接报错提示 —— 这就是「内容高度解耦」的保障：
@@ -88,41 +87,7 @@ const openSource = defineCollection({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3) 团队成员集合
-//    每个文件一名成员。正文（Body）可写更长的个人介绍，也可以留空。
-// ─────────────────────────────────────────────────────────────────────────────
-const members = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/members' }),
-  schema: ({ image }) =>
-    z.object({
-      // 【必填】中文姓名（显示为大标题）
-      name: z.string(),
-      // 【选填】英文名（显示在中文名下方的小字）
-      nameEn: z.string().optional(),
-      // 【选填】头像：相对路径 ./images/xxx
-      avatar: image().optional(),
-      // 【选填】照片列表（支持多张，用于轮播图），相对路径 ./images/xxx
-      photos: z.array(image()).default([]),
-      // 【必填】成员身份/职务，如 "视觉组组长"
-      position: z.string(),
-      // 【选填】徽章，如 ["26赛季队长", "自瞄主力"]
-      badges: z.array(z.string()).default([]),
-      // 【选填】技术栈标签，如 ["C++", "OpenCV", "Deep Learning"]
-      tech: z.array(z.string()).default([]),
-      // 【必填】主要贡献
-      contribution: z.string(),
-      // 【选填】经历
-      experience: z.string().optional(),
-      // 【选填】社交链接
-      socials: z
-        .array(z.object({ label: z.string(), url: z.url() }))
-        .default([]),
-      draft: z.boolean().default(false),
-    }),
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 4) 独立页面集合
+// 3) 独立页面集合
 //    顶级路由（如 /about、/project、/induction-training）对应的 Markdown 页面。
 //    文件名（去扩展名）即 URL 路径，由 src/pages/[...slug].astro 统一渲染。
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,7 +104,7 @@ const pages = defineCollection({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5) 入组培训文档集合
+// 4) 入组培训文档集合
 //    src/content/induction/ 下的每个 .md 文件 = 一篇培训文档。
 //    列表页：/induction-training  文章页：/induction-training/<文件名>
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,7 +126,6 @@ const induction = defineCollection({
 export const collections = {
   algorithms,
   'open-source': openSource,
-  members,
   pages,
   induction,
 };
