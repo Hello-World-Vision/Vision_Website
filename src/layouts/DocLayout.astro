@@ -68,25 +68,25 @@ const formattedDate = date
 <BaseLayout title={title} description={description} lock={lock}>
   <!-- 文章主体：左占位 + 中间正文（绝对居中）+ 右侧目录 -->
   <div class="mx-auto flex w-full max-w-[100rem] items-start justify-center gap-8 px-4 py-16 sm:px-6 md:px-8">
-    <!-- 左侧批注栏 -->
-    <aside class="hidden w-64 shrink-0 self-stretch lg:block">
-      <div class="sticky top-24" id="annotation-sidebar">
-        <div class="mb-4 flex items-center justify-between border-b border-zinc-200/60 pb-3 dark:border-zinc-800/60">
-          <p class="flex items-center gap-1.5">
-            <svg class="h-3.5 w-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-            </svg>
-            <span class="eyebrow text-zju-400">批注</span>
-          </p>
-          <span id="annotation-count" class="font-mono text-xs text-zinc-500">0</span>
-        </div>
-        <div id="annotation-list"></div>
+    <!-- 左侧批注栏（随页面滚动，批注卡片锚定到正文对应位置） -->
+    <aside class="hidden w-64 shrink-0 self-stretch lg:block" id="annotation-aside">
+      <div class="mb-4 flex items-center justify-between border-b border-zinc-200/60 pb-3 dark:border-zinc-800/60">
+        <p class="flex items-center gap-1.5">
+          <svg class="h-3.5 w-3.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+          </svg>
+          <span class="eyebrow text-zju-400">批注</span>
+        </p>
+        <span id="annotation-count" class="font-mono text-xs text-zinc-500">0</span>
+      </div>
+      <div id="annotation-anchors" class="relative">
         <div id="annotation-empty" class="mt-6 rounded-lg border border-dashed border-zinc-300/40 p-4 text-center text-xs leading-relaxed text-zinc-400 dark:border-zinc-700/40 dark:text-zinc-500">
           <svg class="mx-auto mb-2 h-6 w-6 text-zinc-300 dark:text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
           选中正文中的文字<br>即可添加批注。
         </div>
+        <div id="annotation-list"></div>
       </div>
     </aside>
 
@@ -144,10 +144,10 @@ const formattedDate = date
       </article>
     </div>
 
-    <!-- 右侧目录（窄屏自动隐藏，sticky 随页面滚动） -->
+    <!-- 右侧目录（窄屏自动隐藏，sticky 固定、内部可独立滚动） -->
     <aside class="hidden w-64 shrink-0 self-stretch lg:block">
       {toc.length > 0 && (
-        <div class="sticky top-24 rounded-2xl border border-zinc-200 bg-white/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50 backdrop-blur">
+        <div class="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-zinc-200 bg-white/70 p-5 dark:border-zinc-800 dark:bg-zinc-900/50 backdrop-blur toc-scroll">
           <p class="eyebrow mb-4 text-zju-400">目录</p>
           <nav class="space-y-2 text-sm">
             {toc.map((h) => (
@@ -182,6 +182,22 @@ const formattedDate = date
 </BaseLayout>
 
 <style>
+  /* 目录独立滚动时的细滚动条 */
+  .toc-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.3) transparent;
+  }
+  .toc-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+  .toc-scroll::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.3);
+    border-radius: 9999px;
+  }
+  .toc-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   /* 锚点跳转时给吸顶 Header 让出空间 */
   article :is(h2, h3, h4) {
     scroll-margin-top: 7rem;
@@ -429,11 +445,33 @@ const formattedDate = date
 
   /* ── 左侧批注列表项（dynamic 元素，需 global）── */
 
-  /* 批注列表容器 */
+  /* 批注列表容器（卡片为绝对定位，top 由 JS 计算，锚定正文对应位置） */
   :global(#annotation-list) {
+    position: static;
+  }
+
+  /* 被顺延的批注角标（同一位置有多条批注被挤开时显示） */
+  :global(.annotation-offset) {
+    position: absolute;
+    top: 0.375rem;
+    right: 1.875rem;
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.15rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: rgba(56, 189, 248, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  :global(.annotation-item.is-offset .annotation-offset) {
+    opacity: 1;
+  }
+  :global(.annotation-offset::before) {
+    content: '⇡';
+    font-size: 0.6875rem;
   }
 
   /* 单条批注卡片 */
@@ -663,6 +701,23 @@ const formattedDate = date
       if (link) {
         link.style.color = '#38bdf8';
         link.style.textShadow = '0 0 12px rgba(56, 189, 248, 0.7)';
+        // 当前项超出目录可视区时，自动滚动目录使其可见：
+        // 位于下方 → 滚动到目录底部贴边显示；位于上方 → 滚动回顶部附近
+        const container = link.closest('.toc-scroll') as HTMLElement | null;
+        if (container) {
+          const cRect = container.getBoundingClientRect();
+          const lRect = link.getBoundingClientRect();
+          const pad = 8;
+          let target = container.scrollTop;
+          if (lRect.top < cRect.top) {
+            target += lRect.top - cRect.top - pad;
+          } else if (lRect.bottom > cRect.bottom) {
+            target += lRect.bottom - cRect.bottom + pad;
+          }
+          if (Math.abs(target - container.scrollTop) > 0.5) {
+            container.scrollTo({ top: target, behavior: 'smooth' });
+          }
+        }
       }
     };
 
@@ -748,6 +803,8 @@ const formattedDate = date
     const cancelBtn = document.getElementById('popup-cancel-btn')!;
     const popupCloseBtn = document.getElementById('popup-close-btn')!;
     const sidebar = document.getElementById('annotation-list')!;
+    const anchors = document.getElementById('annotation-anchors')!;
+    const aside = document.getElementById('annotation-aside')!;
     const emptyHint = document.getElementById('annotation-empty')!;
     const countEl = document.getElementById('annotation-count')!;
 
@@ -768,6 +825,7 @@ const formattedDate = date
         item.style.animationDelay = `${idx * 0.04}s`;
         item.innerHTML = `
           <button class="annotation-delete" data-id="${ann.id}">✕</button>
+          <span class="annotation-offset">顺延</span>
           <div class="annotation-note">${escapeHtml(ann.note)}</div>
           <div class="annotation-quote">${escapeHtml(ann.text)}</div>
           <div class="annotation-footer">
@@ -842,6 +900,57 @@ const formattedDate = date
       });
     }
 
+    // ---------- 锚定布局：卡片跟随正文对应位置 ----------
+    function layoutAnnotations() {
+      if (!anchors || !aside || aside.offsetParent === null) return; // 小屏侧栏隐藏时跳过
+
+      const items = Array.from(
+        anchors.querySelectorAll<HTMLElement>('.annotation-item')
+      );
+      if (!items.length) return;
+
+      // 引文在正文中已找不到的批注 → 自动删除（不显示、不残留）
+      for (const item of items) {
+        const id = item.dataset.id;
+        const hl = id
+          ? document.querySelector(`.annotation-highlight[data-annotation-id="${id}"]`)
+          : null;
+        if (!hl) {
+          deleteAnnotation(id!);
+          return; // deleteAnnotation 内部会重新渲染并再次布局
+        }
+      }
+
+      const anchorsRect = anchors.getBoundingClientRect();
+      const GAP = 12;
+      let cursor = 0; // 下一张卡片允许的最小 top（贪心防重叠）
+
+      items.forEach((item) => {
+        const id = item.dataset.id!;
+        const hl = document.querySelector(
+          `.annotation-highlight[data-annotation-id="${id}"]`
+        )!;
+        // viewport 相对坐标差值，与页面滚动无关；负值钳制为 0
+        const anchorY = Math.max(0, hl.getBoundingClientRect().top - anchorsRect.top);
+        const top = Math.max(anchorY, cursor);
+        item.classList.toggle('is-offset', top > anchorY + 4);
+        item.style.position = 'absolute';
+        item.style.left = '0';
+        item.style.right = '0';
+        item.style.top = `${top}px`;
+        cursor = top + item.offsetHeight + GAP;
+      });
+
+      // 容器高度至少撑满正文，批注过多时可自然向下延伸
+      const article = document.querySelector('article');
+      const header = aside.firstElementChild as HTMLElement | null;
+      const articleH = article ? article.getBoundingClientRect().height : cursor;
+      const headerH = header ? header.offsetHeight : 0;
+      const needed = Math.max(articleH - headerH, cursor);
+      anchors.style.height = `${needed}px`;
+      aside.style.height = `${headerH + needed}px`;
+    }
+
     // ---------- 滚动到某条批注 ----------
     function scrollToAnnotation(id: string) {
       const el = document.querySelector(`.annotation-highlight[data-annotation-id="${id}"]`);
@@ -859,6 +968,7 @@ const formattedDate = date
       saveAnnotations(annotations);
       renderAnnotations();
       highlightAnnotations();
+      layoutAnnotations();
     }
 
     // ---------- 工具栏 ----------
@@ -923,6 +1033,7 @@ const formattedDate = date
       currentSelection = null;
       renderAnnotations();
       highlightAnnotations();
+      layoutAnnotations();
     }
 
     // ---------- 事件绑定 ----------
@@ -1001,5 +1112,15 @@ const formattedDate = date
     // ---------- 初始化 ----------
     renderAnnotations();
     highlightAnnotations();
+    layoutAnnotations();
+
+    // 重排触发：窗口缩放 / 资源加载 / 正文尺寸变化（图片、KaTeX、Mermaid 渲染等）
+    window.addEventListener('resize', () => requestAnimationFrame(layoutAnnotations));
+    window.addEventListener('load', () => requestAnimationFrame(layoutAnnotations));
+    const article = document.querySelector('article');
+    if (article && 'ResizeObserver' in window) {
+      const ro = new ResizeObserver(() => requestAnimationFrame(layoutAnnotations));
+      ro.observe(article);
+    }
   })();
 </script>
