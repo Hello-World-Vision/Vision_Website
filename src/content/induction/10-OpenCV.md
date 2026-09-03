@@ -439,7 +439,7 @@ rotated.points(vertices);
 
 一张 8 bit 灰度图可以理解成一个二维数组，每个位置是 `0~255` 的亮度值；普通 8 bit BGR 彩色图则可以理解成“每个位置包含 3 个 `uchar` 数值”的二维数组。
 
-![OpenCV 官方教程用一块局部区域说明：人眼看到的是图像，计算机实际处理的是像素数值矩阵](https://docs.opencv.org/4.x/MatBasicImageForComputer.jpg)
+![OpenCV 官方教程用一块局部区域说明：人眼看到的是图像，计算机实际处理的是像素数值矩阵](images/opencv.png)
 
 *图：OpenCV 官方 `Mat - The Basic Image Container` 教程中的示意图。它非常直观地说明了为什么 `cv::Mat` 是学习 OpenCV 的起点。*
 
@@ -779,7 +779,7 @@ cv::threshold(
 
 它的含义是把连续灰度值压缩成两类：满足条件的像素变成前景，不满足的变成背景。固定阈值最大的优点是简单、快速、可解释；最大的缺点是对曝光和光照变化敏感。
 
-![OpenCV 官方阈值教程示例：左侧为输入图像，右侧为按阈值分割后的结果](https://docs.opencv.org/4.x/Threshold_Tutorial_Theory_Example.jpg)
+![OpenCV 官方阈值教程示例：左侧为输入图像，右侧为按阈值分割后的结果](images/badapple.png)
 
 *图：OpenCV 官方 `Basic Thresholding Operations` 教程。二值化的关键不是“把图片变成黑白”，而是把连续像素值根据一个判据划分成前景和背景。*
 
@@ -856,13 +856,6 @@ cv::morphologyEx(
 | Open | 先腐蚀再膨胀 | 去除小白噪点 |
 | Close | 先膨胀再腐蚀 | 填补小黑洞、连接断裂目标 |
 
-<p align="center">
-  <img src="https://docs.opencv.org/4.x/Morphology_1_Tutorial_Theory_Original_Image.png" width="25%" alt="Original morphology image">
-  <img src="https://docs.opencv.org/4.x/Morphology_1_Tutorial_Theory_Dilation.png" width="25%" alt="Dilation result">
-  <img src="https://docs.opencv.org/4.x/Morphology_1_Tutorial_Theory_Erosion.png" width="25%" alt="Erosion result">
-</p>
-
-<p align="center"><em>OpenCV 官方形态学教程示例：原图（左）、膨胀（中）、腐蚀（右）。观察白色前景的边界如何向外扩张或向内收缩。</em></p>
 
 形态学不是每个 Pipeline 的强制步骤。每增加一次处理，就增加计算量、参数和失败模式；只有当它能够稳定解决真实数据中的问题时才应该加入。
 
@@ -914,7 +907,7 @@ cv::findContours(
 - `CHAIN_APPROX_SIMPLE`：压缩共线点，通常可以明显减少轮廓点数量；
 - 与之相对的 `CHAIN_APPROX_NONE` 会保留边界上的全部点。对于一个矩形，很多共线像素点实际上并没有提供新的几何信息，所以基础目标检测里经常优先使用 `CHAIN_APPROX_SIMPLE`。
 
-![OpenCV 官方轮廓教程：左侧 CHAIN_APPROX_NONE 保存大量边界点，右侧 CHAIN_APPROX_SIMPLE 只保留必要拐点](https://docs.opencv.org/4.x/none.jpg)
+![OpenCV 官方轮廓教程：左侧 CHAIN_APPROX_NONE 保存大量边界点，右侧 CHAIN_APPROX_SIMPLE 只保留必要拐点](images/contour.png)
 
 *图：OpenCV 官方 Contours 教程。示例中矩形使用 `CHAIN_APPROX_NONE` 时保存数百个点，而 `CHAIN_APPROX_SIMPLE` 可以压缩到少量拐点。*
 
