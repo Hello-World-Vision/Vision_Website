@@ -159,7 +159,7 @@ opencode
 
 角色切换不是装饰性操作。不同 Agent 的职责、工具和权限不同。执行任务前必须确认当前模式是否与目标一致。
 
-> [!TIP] Tip
+> [!TIP]
 > opencode自带的主agent只有plan和build，随着使用的深入，你可以自定义自己的主agent,为它配置指定的子agent和权限，并给它一份自己的提示词。具体操作你可以在官方文档中的[这个位置](https://opencode.ai/docs/zh-cn/agents/#%E9%85%8D%E7%BD%AE)看到。
 
 ### 4.2 命令面板
@@ -202,7 +202,7 @@ opencode
 
 禁止只发送文件名而不说明问题。文件引用只解决"Agent 能看到什么"，不能替代"工程师想解决什么"。
 
-> [!TIP] Tip
+> [!TIP]
 > 你可能会在使用时发现在文字后直接跟上@不会出现文件给你选择，这时候你只需要打个空格就可以了。以前的opencode还出现过@后要跟一个单引号才能检索到文件的小问题，现在应该没有了。
 
 ### 4.5 AGENTS.md
@@ -255,7 +255,7 @@ opencode
 
 > OpenCode 配置在启动时加载。修改配置后，必须完全退出并重新启动 OpenCode。
 
-> [!TIP] Tip
+> [!TIP]
 > 或许你会发现你的配置文件是`opencode.jsonc`，这不是问题，jsonc意为**JSON with Comments**，即允许注释的json文件，不需要特意把它改成json.
 
 ### 5.3 提醒

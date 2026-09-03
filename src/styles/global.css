@@ -166,3 +166,63 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── GitHub 风格 alert 色块增强（配合 rehype-github-alerts）────────── */
+/* 默认插件样式只给了左侧彩色竖条与彩色标题；这里补充一层半透明底色，
+   让 NOTE / TIP / CAUTION 等呈现更明显的“色块”。颜色变量由插件样式表提供。 */
+.markdown-alert {
+  border-radius: 0.5rem;
+}
+.markdown-alert-note {
+  background: color-mix(in srgb, var(--rehype-github-alerts-note-color) 10%, transparent);
+}
+.markdown-alert-tip {
+  background: color-mix(in srgb, var(--rehype-github-alerts-tip-color) 10%, transparent);
+}
+.markdown-alert-important {
+  background: color-mix(in srgb, var(--rehype-github-alerts-important-color) 10%, transparent);
+}
+.markdown-alert-warning {
+  background: color-mix(in srgb, var(--rehype-github-alerts-warning-color) 10%, transparent);
+}
+.markdown-alert-caution {
+  background: color-mix(in srgb, var(--rehype-github-alerts-caution-color) 10%, transparent);
+}
+
+/* ── 行内代码块：去掉 Tailwind Typography 自动添加的“反引号”，改为 Monospace 芯片 ── */
+.prose code::before,
+.prose code::after {
+  content: none !important;
+}
+
+.prose code {
+  font-family: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.875em;
+  font-weight: 500;
+  color: inherit;
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid rgba(56, 189, 248, 0.12);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.32em;
+}
+html.dark .prose code {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.15);
+}
+
+/* 代码块（<pre> 里的 code）保持 Shiki 原样，绝对不受上面的“芯片”样式影响 */
+.prose pre code {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  font-weight: inherit !important;
+  color: inherit !important;
+}
+
+/* 大代码块背景：覆盖 Shiki github-dark 自带的偏蓝底色 #24292e，统一为站点中性深色（zinc-900） */
+.prose pre.astro-code {
+  background-color: #18181b !important;
+}

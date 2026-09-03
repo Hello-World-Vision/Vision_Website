@@ -22,6 +22,7 @@
     "astro-icon": "^1.1.5",
     "katex": "^0.18.4",
     "mermaid": "^11.16.1",
+    "rehype-github-alerts": "^4.2.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0"
   },

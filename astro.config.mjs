@@ -8,6 +8,74 @@ import { unified } from '@astrojs/markdown-remark';
 import { remarkReadingTime } from './src/utils/remark-reading-time.mjs';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { rehypeGithubAlerts } from 'rehype-github-alerts';
+import { fromHtml } from 'hast-util-from-html';
+
+// GitHub 风格色块：把正文首段以 <strong> 开头的文本提取为该色块的自定义标题，
+// 没有自定义标题时回退为插件默认标题（Note/Tip/Caution 等）。
+const githubAlertBuild = (alertOptions, originalChildren) => {
+  let title = alertOptions.title;
+  const bodyChildren = [...originalChildren];
+  const firstP = bodyChildren.find(
+    (c) => c && c.type === 'element' && c.tagName === 'p'
+  );
+  if (firstP && Array.isArray(firstP.children) && firstP.children.length) {
+    // 跳过前导空白（换行/空格），找到正文首段里第一个有意义的节点
+    let idx = 0;
+    while (
+      idx < firstP.children.length &&
+      firstP.children[idx].type === 'text' &&
+      firstP.children[idx].value.trim() === ''
+    ) {
+      idx++;
+    }
+    const first = firstP.children[idx];
+    if (first && first.type === 'element' && first.tagName === 'strong') {
+      const text = (first.children || [])
+        .map((n) => (n.type === 'text' ? n.value : ''))
+        .join('')
+        .trim();
+      if (text) {
+        title = text;
+        // 移除前导空白节点与该 <strong>，并去掉后续文字的多余空格
+        firstP.children.splice(0, idx + 1);
+        if (firstP.children[0] && firstP.children[0].type === 'text') {
+          firstP.children[0].value = firstP.children[0].value.replace(/^\s+/, '');
+        }
+        firstP.children = firstP.children.filter(
+          (n) => !(n.type === 'text' && n.value.trim() === '')
+        );
+      }
+    }
+  }
+  const filtered = bodyChildren.filter((c) => {
+    if (c.type !== 'element' || c.tagName !== 'p') return true;
+    const text = (c.children || [])
+      .map((n) => (n.type === 'text' ? n.value : ''))
+      .join('')
+      .trim();
+    return text !== '' || (c.children || []).some((n) => n.type === 'element');
+  });
+  const icon = fromHtml(alertOptions.icon, { fragment: true }).children[0];
+  if (!icon || icon.type !== 'element') return null;
+  const titleEl = {
+    type: 'element',
+    tagName: 'p',
+    properties: { className: ['markdown-alert-title'] },
+    children: [icon, { type: 'text', value: title }],
+  };
+  return {
+    type: 'element',
+    tagName: 'div',
+    properties: {
+      className: [
+        'markdown-alert',
+        `markdown-alert-${alertOptions.keyword.toLowerCase()}`,
+      ],
+    },
+    children: [titleEl, ...filtered],
+  };
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Astro 站点主配置
@@ -43,7 +111,7 @@ export default defineConfig({
     // remark-math + rehype-katex：把正文中的 $...$ / $$...$$ 渲染为 LaTeX 公式。
     processor: unified({
       remarkPlugins: [remarkReadingTime, remarkMath],
-      rehypePlugins: [rehypeKatex],
+      rehypePlugins: [[rehypeGithubAlerts, { build: githubAlertBuild }], rehypeKatex],
     }),
   },
 });
