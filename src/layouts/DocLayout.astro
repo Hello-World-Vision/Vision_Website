@@ -316,6 +316,9 @@ const formattedDate = date
     display: none;
     width: 22rem;
     max-width: calc(100vw - 2rem);
+    max-height: min(80vh, 42rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 1rem;
     border-radius: 0.75rem;
     border: 1px solid rgba(56, 189, 248, 0.3);
@@ -385,6 +388,7 @@ const formattedDate = date
   #annotation-input-popup textarea {
     width: 100%;
     min-height: 5rem;
+    max-height: 40vh;
     padding: 0.5rem 0.625rem;
     border-radius: 0.5rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -403,6 +407,22 @@ const formattedDate = date
   }
   #annotation-input-popup textarea:focus {
     border-color: #38bdf8;
+  }
+  #annotation-input-popup .popup-error {
+    display: none;
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    background: rgba(248, 113, 113, 0.1);
+    color: #f87171;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  html.light #annotation-input-popup .popup-error {
+    background: rgba(248, 113, 113, 0.08);
+    color: #dc2626;
   }
   #annotation-input-popup .popup-actions {
     display: flex;
@@ -754,6 +774,7 @@ const formattedDate = date
   </div>
   <div class="selected-text-preview" id="popup-selected-text"></div>
   <textarea id="annotation-textarea" placeholder="输入批注内容…" rows="3"></textarea>
+  <div id="annotation-error" class="popup-error" role="alert" style="display:none"></div>
   <div class="popup-actions">
     <button class="btn-cancel" id="popup-cancel-btn">取消</button>
     <button class="btn-save" id="popup-save-btn">保存</button>
@@ -775,20 +796,33 @@ const formattedDate = date
       } catch { return []; }
     }
 
-    function saveAnnotations(annotations) {
+    function saveAnnotations(annotations: any) {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         const data = raw ? JSON.parse(raw) : {};
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+          throw new Error('批注数据已损坏');
+        }
         data[pageKey] = annotations;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      } catch {}
+        return { ok: true as const };
+      } catch (err: any) {
+        const isQuota =
+          err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014);
+        return {
+          ok: false as const,
+          message: isQuota
+            ? '保存失败：浏览器本地存储空间不足，请精简批注内容或删除一些旧批注后重试。'
+            : '保存失败：无法写入浏览器本地存储，请检查是否处于无痕/隐私模式。',
+        };
+      }
     }
 
     function getAnnotations() { return loadAnnotations(); }
 
-    function formatTime(ts) {
+    function formatTime(ts: number) {
       const d = new Date(ts);
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad = (n: number) => String(n).padStart(2, '0');
       return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
@@ -808,6 +842,7 @@ const formattedDate = date
     const aside = document.getElementById('annotation-aside')!;
     const emptyHint = document.getElementById('annotation-empty')!;
     const countEl = document.getElementById('annotation-count')!;
+    const errorEl = document.getElementById('annotation-error')!;
 
     let currentSelection: { text: string; range: Range; y: number } | null = null;
 
@@ -854,10 +889,67 @@ const formattedDate = date
     }
 
     // ---------- 高亮所有已批注文本 ----------
+    function collectTextNodes(root: Node): Text[] {
+      const nodes: Text[] = [];
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        nodes.push(node);
+      }
+      return nodes;
+    }
+
+    // 把正文中 [start, start+length) 的纯文本范围包成高亮。
+    // 与旧实现不同，这里允许选文跨多个文本节点（加粗/行内代码/段落等），
+    // 因此长段内容也能稳定高亮并保存下来。
+    function wrapAnnotationRange(start: number, length: number, annId: string) {
+      const article = document.querySelector('article');
+      if (!article || length <= 0) return;
+
+      // 先收集当前所有文本节点，再统一处理，避免一边遍历一边插入节点导致偏移错乱
+      const textNodes = collectTextNodes(article);
+      const end = start + length;
+      let charOffset = 0;
+      const segments: { node: Text; start: number; end: number }[] = [];
+
+      for (const node of textNodes) {
+        const nodeLen = node.textContent?.length || 0;
+        const nodeEnd = charOffset + nodeLen;
+        const segStart = Math.max(start, charOffset);
+        const segEnd = Math.min(end, nodeEnd);
+        if (segEnd > segStart) {
+          segments.push({
+            node,
+            start: segStart - charOffset,
+            end: segEnd - charOffset,
+          });
+        }
+        charOffset = nodeEnd;
+      }
+
+      for (const seg of segments) {
+        const text = seg.node.textContent || '';
+        const span = document.createElement('span');
+        span.className = 'annotation-highlight';
+        span.dataset.annotationId = annId;
+        span.textContent = text.slice(seg.start, seg.end);
+        const before = text.slice(0, seg.start);
+        const after = text.slice(seg.end);
+        const parent = seg.node.parentNode;
+        if (!parent) continue;
+        seg.node.textContent = before;
+        parent.insertBefore(span, seg.node.nextSibling);
+        if (after) {
+          parent.insertBefore(document.createTextNode(after), span.nextSibling);
+        }
+      }
+    }
+
     function highlightAnnotations() {
-      // 清除旧高亮
+      // 清除旧高亮（若出现嵌套高亮，父级先被替换后子级会自动随父级移除，跳过即可）
       document.querySelectorAll('.annotation-highlight').forEach((el) => {
-        const parent = el.parentNode!;
+        const parent = el.parentNode;
+        if (!parent || !el.isConnected) return;
         parent.replaceChild(document.createTextNode(el.textContent || ''), el);
         parent.normalize();
       });
@@ -871,33 +963,7 @@ const formattedDate = date
       annotations.forEach((ann: any) => {
         const idx = bodyText.indexOf(ann.text);
         if (idx === -1) return;
-
-        // Walk text nodes to find and wrap the target text
-        const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, null);
-        let charOffset = 0;
-        let node: Text | null;
-        while ((node = walker.nextNode() as Text | null)) {
-          const nextOffset = charOffset + (node.textContent?.length || 0);
-          if (charOffset <= idx && idx < nextOffset) {
-            const localStart = idx - charOffset;
-            const localEnd = localStart + ann.text.length;
-            // Only wrap if the entire match is within this text node
-            if (localEnd <= (node.textContent?.length || 0)) {
-              const span = document.createElement('span');
-              span.className = 'annotation-highlight';
-              span.dataset.annotationId = ann.id;
-              span.textContent = node.textContent!.slice(localStart, localEnd);
-              const rest = node.textContent!.slice(localEnd);
-              node.textContent = node.textContent!.slice(0, localStart);
-              node.parentNode!.insertBefore(span, node.nextSibling);
-              if (rest) {
-                node.parentNode!.insertBefore(document.createTextNode(rest), span.nextSibling);
-              }
-            }
-            break;
-          }
-          charOffset = nextOffset;
-        }
+        wrapAnnotationRange(idx, ann.text.length, ann.id);
       });
     }
 
@@ -966,7 +1032,11 @@ const formattedDate = date
     function deleteAnnotation(id: string) {
       let annotations = getAnnotations();
       annotations = annotations.filter((a: any) => a.id !== id);
-      saveAnnotations(annotations);
+      const result = saveAnnotations(annotations);
+      if (!result.ok) {
+        console.error('[批注] 删除失败：', result.message);
+        return;
+      }
       renderAnnotations();
       highlightAnnotations();
       layoutAnnotations();
@@ -992,26 +1062,51 @@ const formattedDate = date
     }
 
     // ---------- 输入浮层 ----------
+    function showError(message: string) {
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+      }
+    }
+
+    function hideError() {
+      if (errorEl) errorEl.style.display = 'none';
+    }
+
+    function autoResizeTextarea() {
+      // 长批注内容自动撑高输入框（受 CSS max-height 限制，超出后内部滚动）
+      textarea.style.height = 'auto';
+      textarea.style.height = (`${Math.min(textarea.scrollHeight, Math.round(window.innerHeight * 0.4))}px`);
+    }
+
     function showPopup(text: string, x: number, y: number) {
+      hideError();
       popupText.textContent = text;
       textarea.value = '';
+      textarea.style.height = '';
       textarea.focus();
+      // 先渲染再测量：display:none 时 offsetWidth/offsetHeight 都是 0，
+      // 直接用 0 定位会导致弹窗在屏幕底部/右侧跑到视口外（长内容时更明显）。
+      popup.style.visibility = 'hidden';
+      popup.style.display = 'block';
+      const pw = popup.offsetWidth;
+      const ph = popup.offsetHeight;
       // Position popup below toolbar area
       let top = y + 20;
       let left = x;
-      const pw = popup.offsetWidth;
       if (left + pw / 2 > window.innerWidth - 16) left = window.innerWidth - 16 - pw / 2;
       if (left - pw / 2 < 16) left = 16 + pw / 2;
-      if (top + popup.offsetHeight > window.innerHeight - 16) {
-        top = Math.max(16, y - 40 - popup.offsetHeight);
+      if (top + ph > window.innerHeight - 16) {
+        top = Math.max(16, y - 40 - ph);
       }
       popup.style.top = top + 'px';
       popup.style.left = left + 'px';
-      popup.style.display = 'block';
+      popup.style.visibility = 'visible';
       hideToolbar();
     }
 
     function hidePopup() {
+      hideError();
       popup.style.display = 'none';
     }
 
@@ -1029,7 +1124,11 @@ const formattedDate = date
         y: currentSelection.y,
         createdAt: Date.now(),
       });
-      saveAnnotations(annotations);
+      const result = saveAnnotations(annotations);
+      if (!result.ok) {
+        showError(result.message);
+        return;
+      }
       hidePopup();
       currentSelection = null;
       renderAnnotations();
@@ -1048,13 +1147,16 @@ const formattedDate = date
         return;
       }
 
-      const text = sel.toString().trim();
+      const range = sel.getRangeAt(0);
+      // 用 cloneContents().textContent 而不是 range.toString()：
+      // 跨段落/跨块级元素选择时，toString 可能插入换行，导致与 article.textContent
+      // 对不上，保存后找不到引文而被当作“失效批注”自动删除。
+      const text = (range.cloneContents().textContent || sel.toString()).trim();
       if (!text || text.length < 2) {
         hideToolbar();
         return;
       }
 
-      const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       // 只处理 article 内的选择
       if (!document.querySelector('article')?.contains(range.commonAncestorContainer)) {
@@ -1101,6 +1203,9 @@ const formattedDate = date
       hidePopup();
       currentSelection = null;
     });
+
+    // 输入长内容时自动撑高文本框
+    textarea.addEventListener('input', autoResizeTextarea);
 
     // Ctrl+Enter 快捷保存
     textarea.addEventListener('keydown', (e) => {
