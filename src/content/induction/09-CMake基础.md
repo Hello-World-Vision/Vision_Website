@@ -128,9 +128,9 @@ project/
 ```cmake
 cmake_minimum_required(VERSION 3.20)
 
-project(HelloCMake)
+project(HelloSLAM)
 
-add_executable(hello hello.cpp)
+add_executable(helloSLAM hello.cpp)
 ```
 
 这已经是一个完整的 CMake 项目。
@@ -146,18 +146,18 @@ cmake_minimum_required(VERSION 3.20)
 接下来：
 
 ```cmake
-project(HelloCMake)
+project(HelloSLAM)
 ```
 
-定义项目名称为 `HelloCMake`。
+定义项目名称为 `HelloSLAM`。
 
 最后：
 
 ```cmake
-add_executable(hello hello.cpp)
+add_executable(helloSLAM hello.cpp)
 ```
 
-告诉 CMake：使用 `hello.cpp` 构建一个名为 `hello` 的可执行程序。
+告诉 CMake：使用 `hello.cpp` 构建一个名为 `helloSLAM` 的可执行程序。
 
 `add_executable` 可以简单理解为：
 
@@ -191,7 +191,7 @@ $ make
 [100%] Linking CXX executable helloSLAM
 [100%] Built target helloSLAM
 ```
-此时你`ls`一下，可以看到目录里多出了刚才在`CMakeLists.txt` 中声明的那个可执行程序 helloSLAM（表现为绿色）。执行它
+此时你`ls`一下，可以看到目录里多出了刚才在`CMakeLists.txt` 中声明的那个可执行程序 `helloSLAM`（表现为绿色）。执行它
 ```
 $ ./helloSLAM 
 Hello SLAM!
