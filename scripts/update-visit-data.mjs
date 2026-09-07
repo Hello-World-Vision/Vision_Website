@@ -15,11 +15,15 @@ const payload = await response.json();
 
 // GoatCounter 的返回结构可能随 API 版本增加字段；只提取带时间和 count 的统计项。
 const rows = [];
+const dayRows = [];
 const walk = (value) => {
   if (Array.isArray(value)) return value.forEach(walk);
   if (!value || typeof value !== 'object') return;
   const timestamp = value.hour ?? value.time ?? value.date ?? value.day;
-  const count = Number(value.count ?? value.visits ?? value.total);
+  const count = Number(value.count ?? value.visits ?? value.total ?? value.daily);
+  if (value.day && Array.isArray(value.hourly)) {
+    dayRows.push({ day: String(value.day), hourly: value.hourly });
+  }
   if (timestamp && Number.isFinite(count)) rows.push({ timestamp: String(timestamp), count });
   Object.values(value).forEach((child) => {
     if (child && typeof child === 'object') walk(child);
@@ -36,6 +40,14 @@ for (const row of rows) {
   if (date.getUTCFullYear() !== now.getUTCFullYear() || date.getUTCMonth() !== now.getUTCMonth()) continue;
   daily[date.getUTCDate() - 1] += row.count;
   hourly[date.getUTCHours()] += row.count;
+}
+for (const row of dayRows) {
+  const date = new Date(`${row.day}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.getUTCFullYear() !== now.getUTCFullYear() || date.getUTCMonth() !== now.getUTCMonth()) continue;
+  row.hourly.forEach((value, hour) => {
+    const count = Number(value) || 0;
+    hourly[hour] += count;
+  });
 }
 
 await mkdir('public/data', { recursive: true });
