@@ -22,7 +22,7 @@ const total = daily.reduce((sum, value) => sum + value, 0);
     <section class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-3">
       <div class="stat-card"><span>本月访问量</span><strong id="visit-total">{total.toLocaleString()}</strong><small>累计访问</small></div>
       <div class="stat-card"><span>今日访问量</span><strong id="visit-today">{daily[daily.length - 1]}</strong><small>截至当前统计周期</small></div>
-      <div class="stat-card"><span>高峰时段</span><strong id="visit-peak">{String(hourly.indexOf(maxHourly)).padStart(2, '0')}:00</strong><small>访问最集中时段</small></div>
+      <div class="stat-card"><span>高峰时段</span><strong id="visit-peak">暂无</strong><small>访问最集中时段</small></div>
     </section>
 
     <section class="chart-card mx-auto mt-6 max-w-6xl">
@@ -62,7 +62,8 @@ const total = daily.reduce((sum, value) => sum + value, 0);
     const maxHourly = Math.max(1, ...hourly);
     document.querySelector('#visit-total').textContent = Number(data.total || 0).toLocaleString();
     document.querySelector('#visit-today').textContent = String(daily[daily.length - 1] || 0);
-    document.querySelector('#visit-peak').textContent = `${String(hourly.indexOf(maxHourly)).padStart(2, '0')}:00`;
+    const peakIndex = hourly.indexOf(Math.max(...hourly));
+    document.querySelector('#visit-peak').textContent = peakIndex >= 0 ? `${String(peakIndex).padStart(2, '0')}:00` : '暂无';
     document.querySelectorAll('[data-bar-index]').forEach((column) => {
       const value = daily[Number(column.dataset.barIndex)] || 0;
       column.querySelector('.bar-value').textContent = value;
