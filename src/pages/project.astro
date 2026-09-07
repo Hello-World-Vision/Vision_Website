@@ -30,7 +30,7 @@ const projects = [
       </p>
     </header>
 
-    <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="项目列表">
+    <section class="mx-auto grid max-w-5xl grid-cols-1 gap-6 sm:grid-cols-2" aria-label="项目列表">
       {projects.map((project, index) => (
         <a href={project.href} target={project.external ? '_blank' : undefined} rel={project.external ? 'noreferrer' : undefined} class="project-tile group" aria-label={`进入${project.title}`}>
           <div class="project-tile__image" style={{ backgroundImage: `url('${project.image}')` }}></div>
