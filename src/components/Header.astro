@@ -4,7 +4,7 @@
 // 特性：
 //   - 吸顶 + 毛玻璃（backdrop-blur）
 //   - Logo 为浙大黑白校徽（反色为纯白），标题为 Zhejiang University RoboMaster Vision
-//   - 英文导航菜单（Home / Induction Training / About / Project / Visit）
+//   - 英文导航菜单（Home / Induction Training / About / Project）
 //   - hover 时文字发光 + 底部高亮下划线
 //   - 内置深浅色切换（ThemeToggle）与 GitHub 外链
 // 新增导航入口：在 navItems 数组里加一项即可。
@@ -26,7 +26,6 @@ const navItems: NavItem[] = [
   { label: 'Induction Training', href: `${base}induction-training` },
   { label: 'About', href: `${base}about` },
   { label: 'Project', href: `${base}project` },
-  { label: 'Visit', href: `${base}visit`, exact: true },
 ];
 
 // 判断激活态：非 exact 的导航项，其 href 是当前路径的前缀时也视为激活
