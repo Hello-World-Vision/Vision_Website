@@ -2,7 +2,7 @@ name: Update visit data
 
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
