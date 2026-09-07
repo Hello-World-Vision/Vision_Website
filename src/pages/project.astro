@@ -24,13 +24,13 @@ const projects = [
   <main class="project-page container-page py-16 sm:py-20">
     <header class="mx-auto mb-12 max-w-3xl text-center">
       <p class="eyebrow text-sky-400">HELLO WORLD / PROJECTS</p>
-      <h1 class="mt-4 text-4xl font-extrabold tracking-tight sm:text-6xl">项目交接</h1>
-      <p class="mt-5 text-base leading-7 text-zinc-500 dark:text-zinc-400">
-        探索视觉组正在维护与开发的项目，点击卡片进入对应页面。
+      <h1 class="mt-4 text-4xl font-extrabold tracking-tight sm:text-6xl">项目交接与传承</h1>
+      <p class="mx-auto mt-5 max-w-4xl text-base leading-8 text-zinc-500 dark:text-zinc-400">
+        上赛季视觉组的核心项目跳转，内置文件以较为详细的培养、教学为主，引导新人快速上手，逐渐提升自主学习和实践能力。希望老人为后续的继任者负责，为自己的心血做一个完美的收尾；希望新人好好把握老人的这种跨越时间的细心培养，在学习入队前基础培训之后，快速接收队内项目，加油！
       </p>
     </header>
 
-    <section class="mx-auto grid max-w-5xl grid-cols-1 gap-6 sm:grid-cols-2" aria-label="项目列表">
+    <section class="mx-auto grid max-w-5xl grid-cols-1 gap-12 sm:grid-cols-2" aria-label="项目列表">
       {projects.map((project, index) => (
         <a href={project.href} target={project.external ? '_blank' : undefined} rel={project.external ? 'noreferrer' : undefined} class="project-tile group" aria-label={`进入${project.title}`}>
           <div class="project-tile__image" style={{ backgroundImage: `url('${project.image}')` }}></div>
