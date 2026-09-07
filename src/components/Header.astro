@@ -10,6 +10,7 @@
 // 新增导航入口：在 navItems 数组里加一项即可。
 // =============================================================================
 import { Icon } from 'astro-icon/components';
+import AdminWidget from './AdminWidget.astro';
 
 interface NavItem {
   label: string;
@@ -69,6 +70,11 @@ const isActive = (item: NavItem) =>
       ))}
 
       <span class="mx-1 hidden h-4 w-px bg-zinc-700 sm:block"></span>
+
+      <!-- 管理员登录/注册(右上角入口) -->
+      <div class="grid h-9 w-9 place-items-center">
+        <AdminWidget />
+      </div>
 
       <!-- 外部链接：GitHub 组织仓库 -->
       <a

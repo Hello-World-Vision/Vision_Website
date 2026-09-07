@@ -1,0 +1,265 @@
+---
+// =============================================================================
+// AdminWidget — 全站管理员小部件(挂在 Header 右上角)
+// 功能:
+//   - 站务预先创建的固定账号 + “用户名/密码”登录(Supabase Auth,独立会话,
+//     不与访客匿名身份冲突;无注册入口)
+//   - 账号由站务在 Supabase 面板创建并以 <用户名>@vision.local 命名
+//     (或直接填完整邮箱),再把 uid 插入 admins 表完成授权
+//   - 状态通过 annotation-api 的 watchAdminStatus 广播给批注栏(DocLayout)
+// =============================================================================
+import { Icon } from 'astro-icon/components';
+---
+
+<!-- 右上角入口 -->
+<button
+  id="admin-fab"
+  class="admin-fab"
+  type="button"
+  title="管理员登录"
+  aria-label="管理员登录"
+>
+  <Icon id="admin-fab-icon" name="mdi:shield-account-outline" class="h-5 w-5" />
+  <span id="admin-fab-badge" class="admin-fab-badge" style="display:none"></span>
+</button>
+
+<!-- 登录面板 -->
+<div id="admin-panel" class="admin-panel" style="display:none">
+  <div class="admin-panel-head">
+    <span id="admin-state">未登录</span>
+    <button id="admin-panel-close" class="admin-close" type="button" aria-label="关闭">✕</button>
+  </div>
+  <div id="admin-signed-out">
+    <input id="admin-username" type="text" placeholder="用户名" autocomplete="username" />
+    <input
+      id="admin-password"
+      type="password"
+      placeholder="密码"
+      autocomplete="current-password"
+    />
+    <div id="admin-error" class="admin-error" style="display:none"></div>
+    <div class="admin-actions">
+      <button id="admin-login-btn" class="admin-btn" type="button">登录</button>
+    </div>
+    <p class="admin-hint">账号由站务创建并授权;登录后可管理全部批注</p>
+  </div>
+  <div id="admin-signed-in" style="display:none">
+    <p id="admin-welcome" class="admin-welcome"></p>
+    <div class="admin-actions">
+      <button id="admin-refresh-btn" class="admin-btn" type="button">刷新状态</button>
+      <button id="admin-logout-btn" class="admin-btn admin-btn-sec" type="button">退出</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* 入口按钮:与 Header 其他圆形图标一致 */
+  #admin-fab {
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #a1a1aa;
+  }
+  #admin-fab:hover { color: #fbbf24; }
+  #admin-fab.is-admin { color: #34d399; }
+  #admin-fab.is-pending { color: #fbbf24; }
+  .admin-fab-badge {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background: #34d399;
+  }
+  #admin-fab.is-pending .admin-fab-badge { background: #fbbf24; }
+  html.light #admin-fab { color: #52525b; }
+  html.light #admin-fab.is-admin { color: #059669; }
+  html.light #admin-fab.is-pending { color: #b45309; }
+
+  /* 面板:固定在右上角,悬浮于吸顶导航之下 */
+  #admin-panel {
+    position: fixed;
+    top: 4.2rem;
+    right: 0.9rem;
+    z-index: 90;
+    width: 17rem;
+    max-width: calc(100vw - 1.8rem);
+    padding: 0.9rem 1rem;
+    border-radius: 0.9rem;
+    color: #e4e4e7;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  html.light #admin-panel { color: #18181b; background: #ffffff; border-color: #e4e4e7; }
+  #admin-panel input {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.45rem;
+    padding: 0.42rem 0.6rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    color: #e4e4e7;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+  }
+  html.light #admin-panel input { color: #18181b; background: #f4f4f5; border-color: #e4e4e7; }
+  #admin-panel input:focus { outline: 2px solid #38bdf8; border-color: transparent; }
+  .admin-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
+  #admin-state { font-size: 0.72rem; color: #a1a1aa; }
+  #admin-state.is-admin { color: #34d399; }
+  #admin-state.is-pending { color: #fbbf24; }
+  .admin-close { background: none; border: none; color: #71717a; cursor: pointer; font-size: 0.8rem; padding: 0 0.2rem; }
+  .admin-close:hover { color: #fb7185; }
+  .admin-error { margin-bottom: 0.5rem; font-size: 0.7rem; color: #fb7185; line-height: 1.5; }
+  html.light .admin-error { color: #e11d48; }
+  .admin-actions { display: flex; gap: 0.5rem; margin-top: 0.15rem; }
+  .admin-btn {
+    flex: 1;
+    padding: 0.42rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    color: #ffffff;
+    background: #0284c7;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .admin-btn:hover { filter: brightness(1.12); }
+  .admin-btn:disabled { opacity: 0.55; cursor: default; }
+  .admin-btn-sec { background: transparent; border-color: #3f3f46; color: #a1a1aa; }
+  html.light .admin-btn-sec { color: #52525b; border-color: #d4d4d8; }
+  .admin-hint { margin: 0.55rem 0 0; font-size: 0.66rem; color: #71717a; line-height: 1.6; }
+  .admin-welcome { margin: 0 0 0.5rem; font-size: 0.72rem; color: #e4e4e7; word-break: break-all; line-height: 1.6; }
+  html.light .admin-welcome { color: #27272a; }
+</style>
+
+<script>
+  import * as api from '../utils/annotation-api';
+
+  (() => {
+    const fab = document.getElementById('admin-fab')! as HTMLButtonElement;
+    const panel = document.getElementById('admin-panel')!;
+    const stateEl = document.getElementById('admin-state')!;
+    const signedOut = document.getElementById('admin-signed-out')!;
+    const signedIn = document.getElementById('admin-signed-in')!;
+    const usernameInput = document.getElementById('admin-username')! as HTMLInputElement;
+    const passwordInput = document.getElementById('admin-password')! as HTMLInputElement;
+    const errorEl = document.getElementById('admin-error')!;
+    const welcomeEl = document.getElementById('admin-welcome')!;
+    const panelClose = document.getElementById('admin-panel-close')! as HTMLButtonElement;
+    const loginBtn = document.getElementById('admin-login-btn')! as HTMLButtonElement;
+    const refreshBtn = document.getElementById('admin-refresh-btn')! as HTMLButtonElement;
+    const logoutBtn = document.getElementById('admin-logout-btn')! as HTMLButtonElement;
+
+    function showError(message: string) {
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
+    function clearError() {
+      errorEl.style.display = 'none';
+    }
+
+    /** 应用 UI 并广播状态给批注栏 */
+    function applyStatus(session: api.AdminSession | null, granted: boolean) {
+      api.setAdminStatus({
+        active: !!session,
+        granted: !!session && granted,
+        email: session?.email ?? '',
+      });
+      fab.classList.toggle('is-admin', !!session && granted);
+      fab.classList.toggle('is-pending', !!session && !granted);
+      const badge = document.getElementById('admin-fab-badge')!;
+      badge.style.display = session ? 'block' : 'none';
+      if (!session) {
+        stateEl.textContent = '未登录';
+        stateEl.className = '';
+        signedOut.style.display = 'block';
+        signedIn.style.display = 'none';
+        return;
+      }
+      stateEl.textContent = granted ? '管理员已就绪' : '账号待授权';
+      stateEl.className = granted ? 'is-admin' : 'is-pending';
+      welcomeEl.textContent = `${session.email}${granted ? '(已授权)' : '(待授权)'}`;
+      signedOut.style.display = 'none';
+      signedIn.style.display = 'block';
+    }
+
+    /** 恢复会话并确认授权状态 */
+    async function sync(): Promise<void> {
+      if (!api.annotationBackendReady) {
+        api.setAdminStatus({ active: false, granted: false, email: '' });
+        stateEl.textContent = '批注后端未配置';
+        signedOut.style.display = 'block';
+        signedIn.style.display = 'none';
+        return;
+      }
+      const session = await api.restoreAdminSession();
+      if (!session) {
+        applyStatus(null, false);
+        return;
+      }
+      const granted = await api.isAuthorizedAdmin(session);
+      applyStatus(session, granted);
+    }
+
+    async function handleLogin() {
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value;
+      if (!api.annotationBackendReady) {
+        showError('共享批注后端未配置,暂无需登录');
+        return;
+      }
+      if (!username || !password) { showError('请输入用户名与密码'); return; }
+      loginBtn.disabled = true;
+      try {
+        await api.adminLogin(username, password);
+        clearError();
+        passwordInput.value = '';
+        await sync();
+      } catch (err) {
+        showError(err instanceof Error ? err.message : '登录失败,请重试');
+      } finally {
+        loginBtn.disabled = false;
+      }
+    }
+
+    async function handleLogout() {
+      logoutBtn.disabled = true;
+      refreshBtn.disabled = true;
+      try {
+        await api.adminLogout();
+      } finally {
+        logoutBtn.disabled = false;
+        refreshBtn.disabled = false;
+        await sync();
+      }
+    }
+
+    // 点击外部关闭面板
+    document.addEventListener('mousedown', (e) => {
+      if (!fab.contains(e.target as Node) && !panel.contains(e.target as Node)) {
+        panel.style.display = 'none';
+      }
+    });
+
+    fab.addEventListener('click', () => {
+      const hidden = panel.style.display === 'none';
+      panel.style.display = hidden ? 'block' : 'none';
+      if (hidden) sync();
+    });
+    panelClose.addEventListener('click', () => { panel.style.display = 'none'; });
+    loginBtn.addEventListener('click', handleLogin);
+    refreshBtn.addEventListener('click', () => sync());
+    logoutBtn.addEventListener('click', handleLogout);
+    usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+    passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
+
+    // 初始化:静默恢复管理员会话并广播
+    sync();
+  })();
+</script>

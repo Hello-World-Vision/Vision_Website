@@ -78,7 +78,10 @@ const formattedDate = date
           </svg>
           <span class="eyebrow text-zju-400">批注</span>
         </p>
-        <span id="annotation-count" class="font-mono text-xs text-zinc-500">0</span>
+        <div class="flex items-center gap-2">
+          <span id="annotation-status" class="annotation-status">…</span>
+          <span id="annotation-count" class="font-mono text-xs text-zinc-500">0</span>
+        </div>
       </div>
       <div id="annotation-anchors" class="relative">
         <div id="annotation-empty" class="mt-6 rounded-lg border border-dashed border-zinc-300/40 p-4 text-center text-xs leading-relaxed text-zinc-400 dark:border-zinc-700/40 dark:text-zinc-500">
@@ -88,6 +91,7 @@ const formattedDate = date
           选中正文中的文字<br>即可添加批注。
         </div>
         <div id="annotation-list"></div>
+        <div id="annotation-orphans" style="display:none"></div>
       </div>
     </aside>
 
@@ -606,11 +610,11 @@ const formattedDate = date
     color: rgba(56, 189, 248, 0.25);
   }
 
-  /* 删除按钮 */
+  /* 编辑 / 删除按钮(仅本人可见操作按钮,悬停显示) */
+  :global(.annotation-item .annotation-edit),
   :global(.annotation-item .annotation-delete) {
     position: absolute;
     top: 0.375rem;
-    right: 0.375rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -626,8 +630,22 @@ const formattedDate = date
     transition: opacity 0.2s ease, background 0.15s, color 0.15s,
                 border-color 0.15s;
   }
+  :global(.annotation-item .annotation-edit) { right: 2rem; }
+  :global(.annotation-item .annotation-delete) { right: 0.375rem; }
+  :global(.annotation-item:hover .annotation-edit),
   :global(.annotation-item:hover .annotation-delete) {
     opacity: 1;
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.25);
+    color: #38bdf8;
+  }
+  :global(.annotation-item .annotation-edit):hover {
+    opacity: 1;
+    background: rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #7dd3fc;
+  }
+  :global(.annotation-item:hover .annotation-delete) {
     background: rgba(248, 113, 113, 0.12);
     border-color: rgba(248, 113, 113, 0.25);
     color: #f87171;
@@ -658,6 +676,39 @@ const formattedDate = date
   :global(.annotation-item):nth-child(3) { animation-delay: 0.06s; }
   :global(.annotation-item):nth-child(4) { animation-delay: 0.09s; }
   :global(.annotation-item):nth-child(5) { animation-delay: 0.12s; }
+
+  /* ── 共享批注:同步状态 / 导入按钮 / 失效折叠区 ── */
+  #annotation-status {
+    font: 10px ui-monospace, monospace;
+    letter-spacing: 0.02em;
+    color: #71717a;
+  }
+  #annotation-status.is-wait { color: #fbbf24; }
+  #annotation-status.is-ok { color: #34d399; }
+  #annotation-status.is-err { color: #fb7185; }
+  html.light #annotation-status.is-wait { color: #b45309; }
+  html.light #annotation-status.is-ok { color: #059669; }
+  html.light #annotation-status.is-err { color: #e11d48; }
+  :global(.annotation-orphans-box) {
+    margin-top: 1rem;
+    border-top: 1px solid #3f3f46;
+    padding-top: 0.6rem;
+  }
+  html.light :global(.annotation-orphans-box) { border-top-color: #e4e4e7; }
+  :global(.annotation-orphans-box summary) {
+    cursor: pointer;
+    font-size: 0.7rem;
+    color: #a1a1aa;
+    user-select: none;
+  }
+  :global(.annotation-orphans-box summary:hover) { color: #38bdf8; }
+  html.light :global(.annotation-orphans-box summary) { color: #71717a; }
+  :global(.annotation-orphans-list) {
+    margin-top: 0.5rem;
+    display: grid;
+    gap: 0.5rem;
+  }
+  :global(.annotation-item.is-orphan) { position: relative; margin: 0; opacity: 0.92; }
 </style>
 
 <script>
@@ -689,8 +740,10 @@ const formattedDate = date
         theme: isDark ? 'dark' : 'default',
         securityLevel: 'loose',
       });
-      const results = await mermaid.run({ nodes });
-      results.forEach((r, i) => {
+      const results = (await mermaid.run({ nodes })) as unknown as
+        | Array<{ error?: unknown }>
+        | undefined;
+      results?.forEach((r) => {
         if (r && r.error) console.warn('Mermaid 渲染失败:', r.error);
       });
     } catch (err) {
@@ -769,7 +822,7 @@ const formattedDate = date
 </div>
 <div id="annotation-input-popup">
   <div class="popup-header">
-    <span>添加批注</span>
+    <span id="popup-title">添加批注</span>
     <button id="popup-close-btn">✕</button>
   </div>
   <div class="selected-text-preview" id="popup-selected-text"></div>
@@ -782,43 +835,116 @@ const formattedDate = date
 </div>
 
 <script>
-  // ── 批注系统 ─────────────────────────────────────────────────
+  // ── 批注系统(云端共享)──────────────────────────────────────
+  // 数据存 Supabase:所有访客可读/可新增,仅批注者本人可删(RLS 保证)。
+  // 未配置后端时自动回退旧版“纯本机 localStorage”模式。
+  import * as api from '../utils/annotation-api';
+
   (() => {
-    // ---------- 工具函数 ----------
-    const STORAGE_KEY = 'zju-annotations';
+    // ---------- 类型与常量 ----------
+    type Ann = {
+      id: string;
+      text: string;      // 引用的原文(quote_text)
+      note: string;
+      createdAt: number; // 毫秒时间戳
+      mine: boolean;     // 当前访客可删除自己的批注
+    };
+
+    const LEGACY_KEY = 'zju-annotations';       // v1 本机数据(回退/导入用)
+    const CACHE_KEY = 'zju-annotations-cache';   // 云端数据本机镜像(断网时兜底展示)
     const pageKey = location.pathname.replace(/\/$/, '') || '/';
 
-    function loadAnnotations() {
+    let serverMode = api.annotationBackendReady;
+    let backendActive = false; // 云端当前是否可用(网络/身份失败后自动降级本机模式)
+    let bootDone = false;
+    let isAdmin = false; // 当前已登录并获授权的管理员
+    let anns: Ann[] = [];
+
+    // ---------- 旧版本机存储 ----------
+    function legacyListRaw(): any[] {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(LEGACY_KEY);
         const data = raw ? JSON.parse(raw) : {};
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
         return data[pageKey] || [];
       } catch { return []; }
     }
 
-    function saveAnnotations(annotations: any) {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        const data = raw ? JSON.parse(raw) : {};
-        if (!data || typeof data !== 'object' || Array.isArray(data)) {
-          throw new Error('批注数据已损坏');
-        }
-        data[pageKey] = annotations;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        return { ok: true as const };
-      } catch (err: any) {
-        const isQuota =
-          err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014);
-        return {
-          ok: false as const,
-          message: isQuota
-            ? '保存失败：浏览器本地存储空间不足，请精简批注内容或删除一些旧批注后重试。'
-            : '保存失败：无法写入浏览器本地存储，请检查是否处于无痕/隐私模式。',
-        };
-      }
+    function legacyToAnn(list: any[]): Ann[] {
+      return list.map((a: any) => ({
+        id: a.id,
+        text: a.text,
+        note: a.note,
+        createdAt: a.createdAt ?? Date.now(),
+        mine: true,
+      }));
     }
 
-    function getAnnotations() { return loadAnnotations(); }
+    function saveLegacy(list: Ann[]) {
+      try {
+        const raw = localStorage.getItem(LEGACY_KEY);
+        const data = raw ? JSON.parse(raw) : {};
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+        data[pageKey] = list.map((a) => ({
+          id: a.id,
+          text: a.text,
+          note: a.note,
+          createdAt: a.createdAt,
+        }));
+        localStorage.setItem(LEGACY_KEY, JSON.stringify(data));
+      } catch { /* 空间不足时静默放弃,批注仍在内存中 */ }
+    }
+
+    function clearLegacyPage() {
+      try {
+        const raw = localStorage.getItem(LEGACY_KEY);
+        const data = raw ? JSON.parse(raw) : {};
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          delete data[pageKey];
+          localStorage.setItem(LEGACY_KEY, JSON.stringify(data));
+        }
+      } catch { /* ignore */ }
+    }
+
+    // ---------- 云端数据本机镜像(按页缓存,断网时兜底展示当前页) ----------
+    function readCache(): Ann[] {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        const rows = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(rows)) return [];
+        return rows
+          .filter((r: any) => r.page_path === pageKey)
+          .map((r: any) => rowToAnn(r));
+      } catch { return []; }
+    }
+
+    function writeCache(rows: any[]) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(rows)); } catch { /* ignore */ }
+    }
+
+    // 把单行变更合并进本机云端镜像,保证断网兜底展示不陈旧
+    function mergeCacheRow(row: any) {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        let rows: any[] = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(rows)) rows = [];
+        const i = rows.findIndex((r: any) => r.id === row.id);
+        if (i >= 0) rows[i] = row; else rows.push(row);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(rows));
+      } catch { /* ignore */ }
+    }
+
+    // 服务端行 → 内部模型(owner 归属在 toAnn 内判定)
+    function rowToAnn(r: any): Ann {
+      const uid = api.currentUid();
+      return {
+        id: r.id,
+        text: r.quote_text,
+        note: r.note,
+        createdAt: new Date(r.created_at).getTime(),
+        mine: !!uid && r.owner === uid,
+      };
+    }
 
     function formatTime(ts: number) {
       const d = new Date(ts);
@@ -832,9 +958,10 @@ const formattedDate = date
     const addBtn = document.getElementById('annotation-add-btn')!;
     const closeBtn = document.getElementById('annotation-close-btn')!;
     const popup = document.getElementById('annotation-input-popup')!;
+    const popupTitle = document.getElementById('popup-title')!;
     const popupText = document.getElementById('popup-selected-text')!;
     const textarea = document.getElementById('annotation-textarea')! as HTMLTextAreaElement;
-    const saveBtn = document.getElementById('popup-save-btn')!;
+    const saveBtn = document.getElementById('popup-save-btn')! as HTMLButtonElement;
     const cancelBtn = document.getElementById('popup-cancel-btn')!;
     const popupCloseBtn = document.getElementById('popup-close-btn')!;
     const sidebar = document.getElementById('annotation-list')!;
@@ -842,44 +969,157 @@ const formattedDate = date
     const aside = document.getElementById('annotation-aside')!;
     const emptyHint = document.getElementById('annotation-empty')!;
     const countEl = document.getElementById('annotation-count')!;
+    const statusEl = document.getElementById('annotation-status')!;
     const errorEl = document.getElementById('annotation-error')!;
+    const orphansEl = document.getElementById('annotation-orphans')!;
 
     let currentSelection: { text: string; range: Range; y: number } | null = null;
+    let editing: Ann | null = null; // 正在编辑的本人批注(编辑模式)
+
+    // ---------- 同步状态提示 ----------
+    function setStatus(text: string, tone: 'wait' | 'ok' | 'err' | 'plain' = 'plain') {
+      if (!statusEl) return;
+      statusEl.textContent = text;
+      statusEl.className = `annotation-status${tone === 'plain' ? '' : ` is-${tone}`}`;
+    }
+
+    // ---------- 旧版批注自动导入 ----------
+    // 云端身份可用时,自动把改版前遗留的本机 localStorage 批注静默推送云端:
+    // 全部成功才清空本机;失败的保留原处,下次访问自动重试。无任何用户提示。
+    async function autoImportLegacy(): Promise<void> {
+      if (!serverMode || !backendActive) return;
+      const legacyItems = legacyListRaw();
+      if (!legacyItems.length) return;
+      if (!api.currentUid()) return;
+
+      const failed: any[] = [];
+      for (const a of legacyItems) {
+        try {
+          await api.createAnnotation({
+            page_path: pageKey,
+            quote_text: a.text,
+            note: a.note,
+          });
+        } catch (err) {
+          failed.push(a);
+          console.error('[批注] 自动导入单条失败:', err);
+        }
+      }
+
+      if (failed.length === 0) {
+        clearLegacyPage();
+      } else {
+        saveLegacy(
+          failed.map((f) => ({
+            id: f.id,
+            text: f.text,
+            note: f.note,
+            createdAt: f.createdAt ?? Date.now(),
+            mine: true,
+          }))
+        );
+      }
+      // 重新拉取服务端列表,把导入结果合并进界面(仅单次,不会递归触发导入)
+      await refreshFromServerSafe();
+    }
+
+    // ---------- 管理员:权限判定(状态由 Header 的 AdminWidget 广播) ----------
+    function canManage(ann: Ann): boolean {
+      // 本人批注始终可删;云端模式下一并放开给已授权管理员
+      return ann.mine || (backendActive && isAdmin);
+    }
+
+    // 订阅共享管理员状态,变化时刷新删除按钮可见性
+    api.watchAdminStatus((status) => {
+      if (status.granted !== isAdmin) {
+        isAdmin = status.granted;
+        refreshView();
+      }
+    });
 
     // ---------- 渲染批注列表 ----------
-    function renderAnnotations() {
-      const annotations = getAnnotations();
-      if (countEl) countEl.textContent = String(annotations.length);
-      if (emptyHint) emptyHint.style.display = annotations.length === 0 ? 'block' : 'none';
-
+    // matched:正文中能找到引文、可以正常锚定的批注 id 集合;
+    // 找不到引文(原文被修改/渲染变化)的批注保留在折叠区,绝不自动删除。
+    function renderAnnotations(matched: Set<string>) {
+      const total = anns.length;
+      if (countEl) countEl.textContent = String(total);
+      if (emptyHint) emptyHint.style.display = total === 0 ? 'block' : 'none';
       if (!sidebar) return;
       sidebar.innerHTML = '';
-      annotations.forEach((ann: any, idx: number) => {
-        const item = document.createElement('div');
-        item.className = 'annotation-item';
-        item.dataset.id = ann.id;
-        item.style.animationDelay = `${idx * 0.04}s`;
-        item.innerHTML = `
-          <button class="annotation-delete" data-id="${ann.id}">✕</button>
-          <span class="annotation-offset">顺延</span>
-          <div class="annotation-note">${escapeHtml(ann.note)}</div>
-          <div class="annotation-quote">${escapeHtml(ann.text)}</div>
-          <div class="annotation-footer">
-            <span class="annotation-time">${formatTime(ann.createdAt)}</span>
-            <span class="annotation-index">#${String(idx + 1).padStart(2, '0')}</span>
-          </div>
-        `;
+
+      const visible = anns.filter((a) => matched.has(a.id));
+      const orphans = anns.filter((a) => !matched.has(a.id));
+
+      visible.forEach((ann, idx) => {
+        const item = buildCard(ann, idx + 1, true);
+        // 点击自己的批注 → 打开编辑;点击他人批注 → 滚动定位到正文高亮
         item.addEventListener('click', (e) => {
-          if ((e.target as HTMLElement).classList.contains('annotation-delete')) return;
-          scrollToAnnotation(ann.id);
+          if (ann.mine) openEditPopup(ann, e.clientX, e.clientY);
+          else scrollToAnnotation(ann.id);
         });
-        const delBtn = item.querySelector('.annotation-delete')!;
+        sidebar.appendChild(item);
+      });
+
+      // 失效批注折叠区:保留数据,提示“原文已更新”,作者仍可删除
+      if (orphans.length === 0) {
+        orphansEl.style.display = 'none';
+        orphansEl.innerHTML = '';
+      } else {
+        const totalIdx = visible.length;
+        const frag = document.createElement('div');
+        frag.innerHTML = `
+          <details class="annotation-orphans-box">
+            <summary>原文已更新的批注(${orphans.length})</summary>
+            <div class="annotation-orphans-list"></div>
+          </details>`;
+        const list = frag.querySelector('.annotation-orphans-list')!;
+        orphans.forEach((ann) => {
+          list.appendChild(buildCard(ann, totalIdx + 1, false));
+        });
+        orphansEl.style.display = 'block';
+        orphansEl.innerHTML = '';
+        orphansEl.appendChild(frag.firstChild as Node);
+      }
+    }
+
+    function buildCard(ann: Ann, idx: number, anchored: boolean): HTMLElement {
+      const item = document.createElement('div');
+      item.className = `annotation-item${anchored ? '' : ' is-orphan'}`;
+      item.dataset.id = ann.id;
+      item.style.animationDelay = `${Math.min(idx - 1, 4) * 0.04}s`;
+      item.innerHTML = `
+        ${ann.mine ? `<button class="annotation-edit" data-id="${ann.id}" title="编辑批注" aria-label="编辑批注">✎</button>` : ''}
+        ${canManage(ann) ? `<button class="annotation-delete" data-id="${ann.id}">✕</button>` : ''}
+        <span class="annotation-offset">顺延</span>
+        <div class="annotation-note">${escapeHtml(ann.note)}</div>
+        <div class="annotation-quote">${escapeHtml(ann.text)}</div>
+        <div class="annotation-footer">
+          <span class="annotation-time">${formatTime(ann.createdAt)}</span>
+          <span class="annotation-index">#${String(idx).padStart(2, '0')}</span>
+        </div>
+      `;
+      const editBtn = item.querySelector('.annotation-edit');
+      if (editBtn) {
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openEditPopup(ann, (e as MouseEvent).clientX, (e as MouseEvent).clientY);
+        });
+      }
+      const delBtn = item.querySelector('.annotation-delete');
+      if (delBtn) {
         delBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           deleteAnnotation(ann.id);
         });
-        sidebar.appendChild(item);
-      });
+      }
+      return item;
+    }
+
+    // ---------- 全量刷新:高亮 → 渲染 → 锚定布局 ----------
+    function refreshView() {
+      const matched = highlightAnnotations();
+      renderAnnotations(matched);
+      layoutAnnotations();
     }
 
     function escapeHtml(str: string) {
@@ -945,7 +1185,7 @@ const formattedDate = date
       }
     }
 
-    function highlightAnnotations() {
+    function highlightAnnotations(): Set<string> {
       // 清除旧高亮（若出现嵌套高亮，父级先被替换后子级会自动随父级移除，跳过即可）
       document.querySelectorAll('.annotation-highlight').forEach((el) => {
         const parent = el.parentNode;
@@ -954,39 +1194,31 @@ const formattedDate = date
         parent.normalize();
       });
 
-      const annotations = getAnnotations();
+      const matched = new Set<string>();
       const article = document.querySelector('article');
-      if (!article || annotations.length === 0) return;
+      if (!article || anns.length === 0) return matched;
 
       const bodyText = article.textContent || '';
 
-      annotations.forEach((ann: any) => {
+      anns.forEach((ann: Ann) => {
         const idx = bodyText.indexOf(ann.text);
         if (idx === -1) return;
         wrapAnnotationRange(idx, ann.text.length, ann.id);
+        matched.add(ann.id);
       });
+      return matched;
     }
 
     // ---------- 锚定布局：卡片跟随正文对应位置 ----------
+    // 只有引文仍可定位的卡片参与绝对定位;失效批注在折叠区内自然排布。
     function layoutAnnotations() {
       if (!anchors || !aside || aside.offsetParent === null) return; // 小屏侧栏隐藏时跳过
 
       const items = Array.from(
-        anchors.querySelectorAll<HTMLElement>('.annotation-item')
+        sidebar.querySelectorAll<HTMLElement>('.annotation-item')
       );
-      if (!items.length) return;
-
-      // 引文在正文中已找不到的批注 → 自动删除（不显示、不残留）
-      for (const item of items) {
-        const id = item.dataset.id;
-        const hl = id
-          ? document.querySelector(`.annotation-highlight[data-annotation-id="${id}"]`)
-          : null;
-        if (!hl) {
-          deleteAnnotation(id!);
-          return; // deleteAnnotation 内部会重新渲染并再次布局
-        }
-      }
+      const hasOrphans = orphansEl.style.display !== 'none' && orphansEl.offsetHeight > 0;
+      if (!items.length && !hasOrphans) return;
 
       const anchorsRect = anchors.getBoundingClientRect();
       const GAP = 12;
@@ -1008,12 +1240,13 @@ const formattedDate = date
         cursor = top + item.offsetHeight + GAP;
       });
 
-      // 容器高度至少撑满正文，批注过多时可自然向下延伸
+      // 容器高度至少撑满正文，批注过多/失效折叠区存在时可自然向下延伸
       const article = document.querySelector('article');
       const header = aside.firstElementChild as HTMLElement | null;
       const articleH = article ? article.getBoundingClientRect().height : cursor;
       const headerH = header ? header.offsetHeight : 0;
-      const needed = Math.max(articleH - headerH, cursor);
+      const orphansH = hasOrphans ? orphansEl.offsetHeight : 0;
+      const needed = Math.max(articleH - headerH, cursor) + orphansH;
       anchors.style.height = `${needed}px`;
       aside.style.height = `${headerH + needed}px`;
     }
@@ -1028,18 +1261,57 @@ const formattedDate = date
       }
     }
 
-    // ---------- 删除批注 ----------
-    function deleteAnnotation(id: string) {
-      let annotations = getAnnotations();
-      annotations = annotations.filter((a: any) => a.id !== id);
-      const result = saveAnnotations(annotations);
-      if (!result.ok) {
-        console.error('[批注] 删除失败：', result.message);
+    // ---------- 删除批注(本人或管理员;服务端 RLS 兜底) ----------
+    async function deleteAnnotation(id: string) {
+      const target = anns.find((a) => a.id === id);
+      if (!target || (backendActive && !canManage(target))) return;
+
+      const prev = anns;
+      anns = anns.filter((a) => a.id !== id);
+      refreshView();
+
+      if (!backendActive) {
+        saveLegacy(anns);
         return;
       }
-      renderAnnotations();
-      highlightAnnotations();
-      layoutAnnotations();
+      try {
+        await api.removeAnnotation(id);
+      } catch (err) {
+        anns = prev;
+        refreshView();
+        setStatus('删除失败,请刷新后重试', 'err');
+        setTimeout(() => setStatus('', 'plain'), 4000);
+        console.error('[批注] 删除失败:', err);
+      }
+    }
+
+    // ---------- 服务端同步 ----------
+    async function refreshFromServer() {
+      const rows = await api.fetchAnnotations(pageKey);
+      backendActive = true;
+      anns = rows.map((r) => rowToAnn(r as any));
+      writeCache(rows);
+      setStatus('已同步', 'ok');
+      setTimeout(() => setStatus('', 'plain'), 2500);
+      refreshView();
+      return rows;
+    }
+
+    async function refreshFromServerSafe() {
+      try {
+        await refreshFromServer();
+      } catch (err) {
+        console.error('[批注] 云端同步失败:', err);
+        const cached = readCache();
+        if (cached.length) {
+          anns = cached;
+          setStatus('云端不可用,展示缓存', 'err');
+        } else {
+          anns = legacyToAnn(legacyListRaw());
+          setStatus('云端不可用,仅本机可见', 'err');
+        }
+        refreshView();
+      }
     }
 
     // ---------- 工具栏 ----------
@@ -1079,19 +1351,17 @@ const formattedDate = date
       textarea.style.height = (`${Math.min(textarea.scrollHeight, Math.round(window.innerHeight * 0.4))}px`);
     }
 
-    function showPopup(text: string, x: number, y: number) {
+    function showPopupAt(x: number, y: number) {
       hideError();
-      popupText.textContent = text;
-      textarea.value = '';
+      saveBtn.disabled = false;
       textarea.style.height = '';
-      textarea.focus();
       // 先渲染再测量：display:none 时 offsetWidth/offsetHeight 都是 0，
       // 直接用 0 定位会导致弹窗在屏幕底部/右侧跑到视口外（长内容时更明显）。
       popup.style.visibility = 'hidden';
       popup.style.display = 'block';
       const pw = popup.offsetWidth;
       const ph = popup.offsetHeight;
-      // Position popup below toolbar area
+      // Position popup below click point
       let top = y + 20;
       let left = x;
       if (left + pw / 2 > window.innerWidth - 16) left = window.innerWidth - 16 - pw / 2;
@@ -1105,35 +1375,117 @@ const formattedDate = date
       hideToolbar();
     }
 
+    /** 新增批注浮层(选中正文文字后) */
+    function showPopup(text: string, x: number, y: number) {
+      editing = null;
+      popupTitle.textContent = '添加批注';
+      popupText.textContent = text;
+      textarea.value = '';
+      showPopupAt(x, y);
+      textarea.focus();
+    }
+
+    /** 编辑批注浮层:仅本人批注可进入(点击卡片或 ✎ 按钮) */
+    function openEditPopup(ann: Ann, x: number, y: number) {
+      if (!ann.mine) return;
+      editing = ann;
+      popupTitle.textContent = '编辑批注';
+      popupText.textContent = ann.text;
+      textarea.value = ann.note;
+      showPopupAt(x, y);
+      textarea.focus();
+    }
+
     function hidePopup() {
       hideError();
       popup.style.display = 'none';
+      editing = null;
     }
 
-    // ---------- 保存批注 ----------
-    function saveAnnotation() {
-      if (!currentSelection) return;
+    // ---------- 保存/更新批注 ----------
+    async function saveAnnotation() {
       const note = textarea.value.trim();
       if (!note) return;
 
-      const annotations = getAnnotations();
-      annotations.push({
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-        text: currentSelection.text,
-        note,
-        y: currentSelection.y,
-        createdAt: Date.now(),
-      });
-      const result = saveAnnotations(annotations);
-      if (!result.ok) {
-        showError(result.message);
+      // ---- 编辑模式:更新本人批注内容 ----
+      if (editing) {
+        const target = editing;
+        if (!target.mine) { hidePopup(); return; }
+        if (serverMode && !bootDone) {
+          showError('正在连接云端,请稍候再试');
+          return;
+        }
+        saveBtn.disabled = true;
+        if (!backendActive) {
+          anns = anns.map((a) => (a.id === target.id ? { ...a, note } : a));
+          saveLegacy(anns);
+          saveBtn.disabled = false;
+          hidePopup();
+          refreshView();
+          return;
+        }
+        try {
+          const row = await api.updateAnnotation(target.id, note);
+          anns = anns.map((a) => (a.id === target.id ? rowToAnn(row as any) : a));
+          mergeCacheRow(row as any);
+          saveBtn.disabled = false;
+          hidePopup();
+          refreshView();
+        } catch (err) {
+          saveBtn.disabled = false;
+          showError(err instanceof Error ? err.message : '更新失败,请重试');
+          console.error('[批注] 更新失败:', err);
+        }
         return;
       }
-      hidePopup();
-      currentSelection = null;
-      renderAnnotations();
-      highlightAnnotations();
-      layoutAnnotations();
+
+      // ---- 新增模式 ----
+      if (!currentSelection) return;
+      if (serverMode && !bootDone) {
+        showError('正在连接云端,请稍候再试');
+        return;
+      }
+
+      const quote = currentSelection.text;
+      saveBtn.disabled = true;
+
+      if (!backendActive) {
+        // 本机模式:直接落到 localStorage
+        const local: Ann = {
+          id: crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
+          text: quote,
+          note,
+          createdAt: Date.now(),
+          mine: true,
+        };
+        anns = [...anns, local];
+        saveLegacy(anns);
+        saveBtn.disabled = false;
+        hidePopup();
+        currentSelection = null;
+        refreshView();
+        return;
+      }
+
+      try {
+        const row = await api.createAnnotation({
+          page_path: pageKey,
+          quote_text: quote,
+          note,
+        });
+        anns = [...anns, rowToAnn(row as any)];
+        mergeCacheRow(row as any);
+        saveBtn.disabled = false;
+        hidePopup();
+        currentSelection = null;
+        refreshView();
+      } catch (err) {
+        saveBtn.disabled = false;
+        showError(err instanceof Error ? err.message : '保存失败,请重试');
+        console.error('[批注] 保存失败:', err);
+      }
     }
 
     // ---------- 事件绑定 ----------
@@ -1215,14 +1567,66 @@ const formattedDate = date
       }
     });
 
+    // ---------- 实时接收其他访客的批注变化 ----------
+    function onRemoteChange(evt: api.AnnotationChangeEvent) {
+      if (evt.type === 'insert') {
+        if (anns.some((a) => a.id === evt.row.id)) return;
+        anns = [...anns, rowToAnn(evt.row as any)].sort((a, b) => a.createdAt - b.createdAt);
+        refreshView();
+      } else if (evt.type === 'delete') {
+        if (!anns.some((a) => a.id === evt.row.id)) return;
+        anns = anns.filter((a) => a.id !== evt.row.id);
+        refreshView();
+      } else if (evt.type === 'update') {
+        const i = anns.findIndex((a) => a.id === evt.row.id);
+        if (i === -1) return;
+        const next = [...anns];
+        next[i] = rowToAnn(evt.row as any);
+        anns = next;
+        refreshView();
+      }
+    }
+
+    // ---------- 启动 ----------
+    async function boot() {
+      if (!serverMode) {
+        // 构建时未配置 Supabase:旧版纯本机模式
+        anns = legacyToAnn(legacyListRaw());
+        setStatus('仅本机', 'plain');
+        bootDone = true;
+        refreshView();
+        return;
+      }
+
+      setStatus('同步中…', 'wait');
+      const uid = await api.ensureAnonymousIdentity();
+      if (!uid) {
+        // 匿名身份不可用(未开启 Anonymous sign-ins / 隐私模式):降级本机
+        anns = legacyToAnn(legacyListRaw());
+        setStatus('仅本机', 'err');
+        bootDone = true;
+        refreshView();
+        return;
+      }
+
+      // 先订阅实时事件(避免错过两次拉取间隙的他人新增),再拉全量数据;
+      // 随后静默自动导入本机遗留的旧版批注(失败自动保留,下次再试)
+      api.subscribePage(pageKey, onRemoteChange);
+      await refreshFromServerSafe();
+      await autoImportLegacy();
+      bootDone = true;
+    }
+
     // ---------- 初始化 ----------
-    renderAnnotations();
-    highlightAnnotations();
-    layoutAnnotations();
+    refreshView();
+    boot();
+    // 管理员登录状态由 Header 的 AdminWidget 经 watchAdminStatus 广播,
+    // 权限变化会自动刷新删除按钮,此处无需额外逻辑。
 
     // 重排触发：窗口缩放 / 资源加载 / 正文尺寸变化（图片、KaTeX、Mermaid 渲染等）
     window.addEventListener('resize', () => requestAnimationFrame(layoutAnnotations));
-    window.addEventListener('load', () => requestAnimationFrame(layoutAnnotations));
+    // Mermaid/字体等异步渲染可能改变正文文本,load 后再做一次完整刷新以重定位引文
+    window.addEventListener('load', () => refreshView());
     const article = document.querySelector('article');
     if (article && 'ResizeObserver' in window) {
       const ro = new ResizeObserver(() => requestAnimationFrame(layoutAnnotations));
