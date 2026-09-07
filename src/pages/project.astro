@@ -1,0 +1,66 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { Icon } from 'astro-icon/components';
+import cardRm from '../assets/card-rm.png';
+import cardDji from '../assets/card-dji.png';
+import cardGithub from '../assets/card-github.png';
+
+const base = import.meta.env.BASE_URL;
+
+// 每个项目块都只需要修改这组数据：图片、标题和跳转地址。
+const projects = [
+  { title: '哨兵导航', subtitle: 'SENTINEL NAVIGATION', href: 'https://github.com/Polyacetone/HWSentryNav26/blob/main/TUTORIAL.md', image: cardRm.src, icon: 'mdi:radar', external: true },
+  { title: '飞镖视觉', subtitle: 'DART VISION', href: `${base}docs/open-source/rm-vision-baseline`, image: cardDji.src, icon: 'mdi:target' },
+  { title: '项目三', subtitle: 'PROJECT 03', href: '#', image: cardGithub.src, icon: 'mdi:code-braces' },
+  { title: '项目四', subtitle: 'PROJECT 04', href: '#', image: cardRm.src, icon: 'mdi:cube-outline' },
+  { title: '项目五', subtitle: 'PROJECT 05', href: '#', image: cardDji.src, icon: 'mdi:camera-outline' },
+  { title: '项目六', subtitle: 'PROJECT 06', href: '#', image: cardGithub.src, icon: 'mdi:rocket-launch-outline' },
+  { title: '项目七', subtitle: 'PROJECT 07', href: '#', image: cardRm.src, icon: 'mdi:robot-outline' },
+  { title: '项目八', subtitle: 'PROJECT 08', href: '#', image: cardDji.src, icon: 'mdi:map-marker-path' },
+];
+---
+
+<BaseLayout title="Project" description="ZJU RoboMaster 视觉组项目入口">
+  <main class="project-page container-page py-16 sm:py-20">
+    <header class="mx-auto mb-12 max-w-3xl text-center">
+      <p class="eyebrow text-sky-400">HELLO WORLD / PROJECTS</p>
+      <h1 class="mt-4 text-4xl font-extrabold tracking-tight sm:text-6xl">项目交接</h1>
+      <p class="mt-5 text-base leading-7 text-zinc-500 dark:text-zinc-400">
+        探索视觉组正在维护与开发的项目，点击卡片进入对应页面。
+      </p>
+    </header>
+
+    <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="项目列表">
+      {projects.map((project, index) => (
+        <a href={project.href} target={project.external ? '_blank' : undefined} rel={project.external ? 'noreferrer' : undefined} class="project-tile group" aria-label={`进入${project.title}`}>
+          <div class="project-tile__image" style={{ backgroundImage: `url('${project.image}')` }}></div>
+          <div class="project-tile__shade"></div>
+          <div class="relative z-10 flex min-h-64 flex-col justify-between p-5">
+            <div class="flex items-center justify-between">
+              <span class="grid h-10 w-10 place-items-center rounded-xl border border-white/20 bg-black/20 text-sky-300 backdrop-blur-sm">
+                <Icon name={project.icon} class="h-5 w-5" />
+              </span>
+              <span class="font-mono text-xs text-white/50">0{index + 1}</span>
+            </div>
+            <div>
+              <p class="font-mono text-[10px] tracking-[0.2em] text-sky-300">{project.subtitle}</p>
+              <h2 class="mt-2 text-2xl font-bold text-white">{project.title}</h2>
+              <span class="mt-4 inline-flex items-center gap-1 text-sm text-white/60 transition-colors group-hover:text-sky-300">
+                进入项目 <Icon name="mdi:arrow-right" class="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </span>
+            </div>
+          </div>
+        </a>
+      ))}
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .project-tile { position: relative; overflow: hidden; min-height: 16rem; border: 1px solid rgba(255,255,255,.1); border-radius: 1rem; background: #18181b; transition: transform .35s ease, border-color .35s ease, box-shadow .35s ease; }
+  .project-tile:hover { transform: translateY(-6px); border-color: rgba(56,189,248,.65); box-shadow: 0 18px 38px rgba(0,0,0,.3), 0 0 28px rgba(56,189,248,.14); }
+  .project-tile__image, .project-tile__shade { position: absolute; inset: 0; }
+  .project-tile__image { background-position: center; background-size: cover; opacity: .72; transition: transform .7s ease, opacity .4s ease; }
+  .project-tile:hover .project-tile__image { transform: scale(1.1); opacity: .95; }
+  .project-tile__shade { background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.82)); }
+</style>
