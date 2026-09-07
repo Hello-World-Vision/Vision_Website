@@ -26,7 +26,7 @@ const total = daily.reduce((sum, value) => sum + value, 0);
     </section>
 
     <section class="chart-card mx-auto mt-6 max-w-6xl">
-      <div class="mb-8 flex items-end justify-between"><div><p class="eyebrow text-sky-400">DAILY TRAFFIC</p><h2 class="mt-2 text-2xl font-bold">本月每日访问量</h2></div><span class="font-mono text-xs text-zinc-500">柱形图 · 每日</span></div>
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow text-sky-400">DAILY TRAFFIC</p><h2 class="mt-2 text-2xl font-bold">本月每日访问量</h2></div><div class="flex items-center gap-3"><span class="font-mono text-xs text-zinc-500">柱形图 · 每日</span><button id="visit-refresh" type="button" class="refresh-button">刷新数据</button></div></div>
       <div class="bar-chart" aria-label="本月每日访问量柱形图">
         {daily.map((value, index) => <div class="bar-column" data-bar-index={index}><span class="bar-value">{value}</span><div class="bar" style={{ height: `${(value / maxDaily) * 100}%` }}></div><span class="bar-label">{days[index]}</span></div>)}
       </div>
@@ -39,7 +39,7 @@ const total = daily.reduce((sum, value) => sum + value, 0);
         <div class="line-labels">{hourly.map((_, index) => <span>{String(index).padStart(2, '0')}</span>)}</div>
       </div>
     </section>
-    <p id="visit-status" class="mx-auto mt-6 max-w-6xl text-center text-xs text-zinc-500">数据由 GoatCounter 每小时同步。</p>
+    <p id="visit-status" class="mx-auto mt-6 max-w-6xl text-center text-xs text-zinc-500">数据由 GoatCounter 每 5 分钟同步。</p>
   </main>
 </BaseLayout>
 
@@ -48,11 +48,12 @@ const total = daily.reduce((sum, value) => sum + value, 0);
   .stat-card{display:flex;min-height:8rem;flex-direction:column;justify-content:center;padding:1.5rem}.stat-card span{font-family:ui-monospace;font-size:.75rem;color:#a1a1aa}.stat-card strong{margin-top:.45rem;font-size:2rem;color:#e4e4e7}.stat-card small{font-size:.75rem;color:#71717a}.chart-card{padding:1.25rem}@media(min-width:640px){.chart-card{padding:2rem}}
   .bar-chart{display:flex;height:18rem;align-items:end;gap:clamp(2px,1vw,10px);border-bottom:1px solid #3f3f46;padding:1.5rem .25rem 0}.bar-column{display:flex;height:100%;min-width:0;flex:1;flex-direction:column;align-items:center;justify-content:end}.bar{width:100%;max-width:1.5rem;border-radius:5px 5px 0 0;background:linear-gradient(#38bdf8,#2563eb);box-shadow:0 0 15px #38bdf833;transition:filter .2s}.bar-column:hover .bar{filter:brightness(1.35)}.bar-value{margin-bottom:.3rem;font:10px ui-monospace;color:#71717a}.bar-label{margin-top:.5rem;font:10px ui-monospace;color:#71717a}
   .line-chart{position:relative;height:18rem;padding:1rem .25rem 2rem}.line-chart svg{position:absolute;inset:1rem .25rem 2rem;width:calc(100% - .5rem);height:calc(100% - 3rem);overflow:visible}.line-grid{position:absolute;inset:1rem .25rem 2rem;background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(25% - 1px),#3f3f464d 25%,#3f3f464d 25%)}.line-labels{position:absolute;bottom:0;left:.25rem;right:.25rem;display:flex;justify-content:space-between;font:10px ui-monospace;color:#71717a}.line-labels span:nth-child(n+2):nth-child(-n+23){display:none}@media(min-width:640px){.line-labels span:nth-child(2n){display:block}.line-labels span:nth-child(odd){display:none}}
+  .refresh-button{border:1px solid rgba(56,189,248,.35);border-radius:.5rem;background:rgba(56,189,248,.08);padding:.4rem .7rem;font:11px ui-monospace;color:#7dd3fc;transition:background .2s,border-color .2s}.refresh-button:hover{border-color:rgba(56,189,248,.8);background:rgba(56,189,248,.18)}.refresh-button:disabled{cursor:wait;opacity:.6}
 </style>
 
 <script>
   const dataUrl = `${import.meta.env.BASE_URL}data/visit.json`;
-  fetch(dataUrl, { cache: 'no-store' }).then((response) => {
+  const loadVisitData = () => fetch(`${dataUrl}?t=${Date.now()}`, { cache: 'no-store' }).then((response) => {
     if (!response.ok) throw new Error('visit data unavailable');
     return response.json();
   }).then((data) => {
@@ -75,5 +76,15 @@ const total = daily.reduce((sum, value) => sum + value, 0);
     document.querySelector('#visit-status').textContent = `数据已更新：${new Date(data.updatedAt).toLocaleString('zh-CN')}（UTC）`;
   }).catch(() => {
     document.querySelector('#visit-status').textContent = '统计数据正在同步，稍后刷新页面即可查看。';
+  });
+  loadVisitData();
+  document.querySelector('#visit-refresh').addEventListener('click', (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = '读取中…';
+    loadVisitData().finally(() => {
+      button.disabled = false;
+      button.textContent = '刷新数据';
+    });
   });
 </script>
