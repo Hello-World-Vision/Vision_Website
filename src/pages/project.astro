@@ -1,9 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { Icon } from 'astro-icon/components';
-import cardRm from '../assets/card-rm.png';
 import cardDji from '../assets/card-dji.png';
-import cardGithub from '../assets/card-github.png';
 
 const base = import.meta.env.BASE_URL;
 
@@ -14,9 +12,9 @@ const projects = [
   { title: '雷达视觉', subtitle: 'RADAR VISION', href: 'https://github.com/Hello-World-Vision/RadarStation2026/tree/cicada', image: `${base}images/project/radar-vision.png`, icon: 'mdi:radar', external: true },
   { title: '自瞄', subtitle: 'AUTO AIM', href: '#', image: `${base}images/project/auto-aim.png`, icon: 'mdi:target' },
   { title: '哨兵决策', subtitle: 'SENTRY DECISION', href: '#', image: `${base}images/project/sentry-decision.png`, icon: 'mdi:robot-outline' },
-  { title: '项目六', subtitle: 'PROJECT 06', href: '#', image: cardGithub.src, icon: 'mdi:rocket-launch-outline' },
-  { title: '项目七', subtitle: 'PROJECT 07', href: '#', image: cardRm.src, icon: 'mdi:robot-outline' },
-  { title: '项目八', subtitle: 'PROJECT 08', href: '#', image: cardDji.src, icon: 'mdi:map-marker-path' },
+  { title: '神经网络模型训练&数据集', subtitle: 'NN TRAINING & DATASET', href: '#', image: `${base}images/project/nn-training.png`, icon: 'mdi:brain' },
+  { title: '自定义客户端', subtitle: 'CUSTOM CLIENT', href: '#', image: `${base}images/project/custom-client.png`, icon: 'mdi:robot-outline' },
+  { title: '待定', subtitle: 'PROJECT 08', href: '#', image: cardDji.src, icon: 'mdi:map-marker-path' },
 ];
 ---
 
