@@ -38,10 +38,13 @@ draft: false
 
 - **视频（跟着敲一遍）**：
 
-  - 视频标题：Linux Command Line Tutorial - Learn Linux Terminal in 40 minutes
-  - 视频链接：[https://www.youtube.com/watch?v=kQaOtys9Pp8](https://www.youtube.com/watch?v=kQaOtys9Pp8)
-  - 这是面向机器人开发者的速成视频。打开 Ubuntu 终端，跟着视频同步敲键盘，理解目录切换和文件操作的逻辑。看完并动手练一遍，Linux 命令基础基本就够用了。
-  - 如果当前网络无法访问 YouTube，可以在 Bilibili 搜索 `Linux命令行快速入门教程 零基础`，选择时长较短、带实操演示的视频作为替代。也建议先完成《基础网络配置》。
+  以下视频侧重讲解环境变量的作用、工作原理和 `.bashrc` 相关内容，可以先看，与本文第 3 章配合理解：
+
+  - [Bash Environment Variables](https://www.youtube.com/watch?v=yM8v5i2Qjgg)
+  - [Linux Environment Variables 讲解](https://www.youtube.com/watch?v=N9AOjvM5w5s)
+  - [鱼香 ROS：环境变量中文教学](https://www.bilibili.com/video/BV1pm42137bR/)（中文，暂时先用着）
+
+  打开 Ubuntu 终端，跟着视频同步敲键盘，理解目录切换、文件操作和环境变量的逻辑。如果当前网络无法访问 YouTube，可以先看上面的 B 站中文教学，也建议先完成《基础网络配置》。
 
 ### 1.3 终端与 Shell
 
