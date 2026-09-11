@@ -836,8 +836,9 @@ const formattedDate = date
 
 <script>
   // ── 批注系统(云端共享)──────────────────────────────────────
-  // 数据存 Supabase:所有访客可读/可新增,仅批注者本人可删(RLS 保证)。
-  // 未配置后端时自动回退旧版“纯本机 localStorage”模式。
+  // 数据只存 Supabase:所有访客可读/可新增,仅批注者本人可删(RLS 保证)。
+  // 旧版“zju-annotations”本机批注的读取/导入/降级回退已移除;
+  // 云端不可用时只读展示 zju-annotations-cache 镜像,不写本机批注数据。
   import * as api from '../utils/annotation-api';
 
   (() => {
@@ -850,63 +851,19 @@ const formattedDate = date
       mine: boolean;     // 当前访客可删除自己的批注
     };
 
-    const LEGACY_KEY = 'zju-annotations';       // v1 本机数据(回退/导入用)
-    const CACHE_KEY = 'zju-annotations-cache';   // 云端数据本机镜像(断网时兜底展示)
+    const CACHE_KEY = 'zju-annotations-cache';   // 云端数据本机镜像(断网时只读展示)
     const pageKey = location.pathname.replace(/\/$/, '') || '/';
 
     let serverMode = api.annotationBackendReady;
-    let backendActive = false; // 云端当前是否可用(网络/身份失败后自动降级本机模式)
+    let backendActive = false; // 云端当前是否可用(不可用时只读展示缓存,不写本机批注)
     let bootDone = false;
     let isAdmin = false; // 当前已登录并获授权的管理员
     let anns: Ann[] = [];
 
-    // ---------- 旧版本机存储 ----------
-    function legacyListRaw(): any[] {
-      try {
-        const raw = localStorage.getItem(LEGACY_KEY);
-        const data = raw ? JSON.parse(raw) : {};
-        if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
-        return data[pageKey] || [];
-      } catch { return []; }
-    }
+    // 旧版 zju-annotations 的读取、写入、自动导入和本机降级回退均已移除;
+    // 历史批注已迁移到云端,批注数据以 Supabase 为唯一数据源。
 
-    function legacyToAnn(list: any[]): Ann[] {
-      return list.map((a: any) => ({
-        id: a.id,
-        text: a.text,
-        note: a.note,
-        createdAt: a.createdAt ?? Date.now(),
-        mine: true,
-      }));
-    }
-
-    function saveLegacy(list: Ann[]) {
-      try {
-        const raw = localStorage.getItem(LEGACY_KEY);
-        const data = raw ? JSON.parse(raw) : {};
-        if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-        data[pageKey] = list.map((a) => ({
-          id: a.id,
-          text: a.text,
-          note: a.note,
-          createdAt: a.createdAt,
-        }));
-        localStorage.setItem(LEGACY_KEY, JSON.stringify(data));
-      } catch { /* 空间不足时静默放弃,批注仍在内存中 */ }
-    }
-
-    function clearLegacyPage() {
-      try {
-        const raw = localStorage.getItem(LEGACY_KEY);
-        const data = raw ? JSON.parse(raw) : {};
-        if (data && typeof data === 'object' && !Array.isArray(data)) {
-          delete data[pageKey];
-          localStorage.setItem(LEGACY_KEY, JSON.stringify(data));
-        }
-      } catch { /* ignore */ }
-    }
-
-    // ---------- 云端数据本机镜像(按页缓存,断网时兜底展示当前页) ----------
+    // ---------- 云端数据本机镜像(按页缓存,断网时只读展示当前页) ----------
     function readCache(): Ann[] {
       try {
         const raw = localStorage.getItem(CACHE_KEY);
@@ -931,6 +888,16 @@ const formattedDate = date
         const i = rows.findIndex((r: any) => r.id === row.id);
         if (i >= 0) rows[i] = row; else rows.push(row);
         localStorage.setItem(CACHE_KEY, JSON.stringify(rows));
+      } catch { /* ignore */ }
+    }
+
+    // 删除成功后同步清掉本机镜像,避免断网兜底时把已删批注重新展示出来
+    function removeCacheRow(id: string) {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        const rows = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(rows)) return;
+        writeCache(rows.filter((r: any) => r.id !== id));
       } catch { /* ignore */ }
     }
 
@@ -983,50 +950,10 @@ const formattedDate = date
       statusEl.className = `annotation-status${tone === 'plain' ? '' : ` is-${tone}`}`;
     }
 
-    // ---------- 旧版批注自动导入 ----------
-    // 云端身份可用时,自动把改版前遗留的本机 localStorage 批注静默推送云端:
-    // 全部成功才清空本机;失败的保留原处,下次访问自动重试。无任何用户提示。
-    async function autoImportLegacy(): Promise<void> {
-      if (!serverMode || !backendActive) return;
-      const legacyItems = legacyListRaw();
-      if (!legacyItems.length) return;
-      if (!api.currentUid()) return;
-
-      const failed: any[] = [];
-      for (const a of legacyItems) {
-        try {
-          await api.createAnnotation({
-            page_path: pageKey,
-            quote_text: a.text,
-            note: a.note,
-          });
-        } catch (err) {
-          failed.push(a);
-          console.error('[批注] 自动导入单条失败:', err);
-        }
-      }
-
-      if (failed.length === 0) {
-        clearLegacyPage();
-      } else {
-        saveLegacy(
-          failed.map((f) => ({
-            id: f.id,
-            text: f.text,
-            note: f.note,
-            createdAt: f.createdAt ?? Date.now(),
-            mine: true,
-          }))
-        );
-      }
-      // 重新拉取服务端列表,把导入结果合并进界面(仅单次,不会递归触发导入)
-      await refreshFromServerSafe();
-    }
-
     // ---------- 管理员:权限判定(状态由 Header 的 AdminWidget 广播) ----------
     function canManage(ann: Ann): boolean {
-      // 本人批注始终可删;云端模式下一并放开给已授权管理员
-      return ann.mine || (backendActive && isAdmin);
+      // 删除必须先有云端连接;云端可用时本人或已授权管理员可删
+      return backendActive && (ann.mine || isAdmin);
     }
 
     // 订阅共享管理员状态,变化时刷新删除按钮可见性
@@ -1052,9 +979,9 @@ const formattedDate = date
 
       visible.forEach((ann, idx) => {
         const item = buildCard(ann, idx + 1, true);
-        // 点击自己的批注 → 打开编辑;点击他人批注 → 滚动定位到正文高亮
+        // 云端正可用时才允许编辑自己的批注;否则点击只定位正文高亮
         item.addEventListener('click', (e) => {
-          if (ann.mine) openEditPopup(ann, e.clientX, e.clientY);
+          if (ann.mine && backendActive) openEditPopup(ann, e.clientX, e.clientY);
           else scrollToAnnotation(ann.id);
         });
         sidebar.appendChild(item);
@@ -1073,12 +1000,14 @@ const formattedDate = date
             <div class="annotation-orphans-list"></div>
           </details>`;
         const list = frag.querySelector('.annotation-orphans-list')!;
-        orphans.forEach((ann) => {
-          list.appendChild(buildCard(ann, totalIdx + 1, false));
+        orphans.forEach((ann, idx) => {
+          list.appendChild(buildCard(ann, totalIdx + idx + 1, false));
         });
         orphansEl.style.display = 'block';
         orphansEl.innerHTML = '';
-        orphansEl.appendChild(frag.firstChild as Node);
+        // 模板字符串以换行/缩进开头，firstChild 是文本节点；
+        // 必须用 firstElementChild 才能把 <details> 真正挂进侧栏。
+        orphansEl.appendChild(frag.firstElementChild as Node);
       }
     }
 
@@ -1088,7 +1017,7 @@ const formattedDate = date
       item.dataset.id = ann.id;
       item.style.animationDelay = `${Math.min(idx - 1, 4) * 0.04}s`;
       item.innerHTML = `
-        ${ann.mine ? `<button class="annotation-edit" data-id="${ann.id}" title="编辑批注" aria-label="编辑批注">✎</button>` : ''}
+        ${ann.mine && backendActive ? `<button class="annotation-edit" data-id="${ann.id}" title="编辑批注" aria-label="编辑批注">✎</button>` : ''}
         ${canManage(ann) ? `<button class="annotation-delete" data-id="${ann.id}">✕</button>` : ''}
         <span class="annotation-offset">顺延</span>
         <div class="annotation-note">${escapeHtml(ann.note)}</div>
@@ -1222,15 +1151,30 @@ const formattedDate = date
 
       const anchorsRect = anchors.getBoundingClientRect();
       const GAP = 12;
+
+      // 先测出每张卡片的正文锚点，再按锚点从上到下布局。
+      // 不能直接按批注创建顺序布局：靠下的旧批注会先把 cursor 推大，
+      // 让更靠上的新批注在没有正文重叠时也被误判为“顺延”到旧批注下面。
+      const positioned = items
+        .map((item, order) => {
+          const id = item.dataset.id!;
+          const hl = document.querySelector(
+            `.annotation-highlight[data-annotation-id="${id}"]`
+          );
+          if (!hl) return null;
+          return {
+            item,
+            order,
+            // viewport 相对坐标差值，与页面滚动无关；负值钳制为 0
+            anchorY: Math.max(0, hl.getBoundingClientRect().top - anchorsRect.top),
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+        .sort((a, b) => a.anchorY - b.anchorY || a.order - b.order);
+
       let cursor = 0; // 下一张卡片允许的最小 top（贪心防重叠）
 
-      items.forEach((item) => {
-        const id = item.dataset.id!;
-        const hl = document.querySelector(
-          `.annotation-highlight[data-annotation-id="${id}"]`
-        )!;
-        // viewport 相对坐标差值，与页面滚动无关；负值钳制为 0
-        const anchorY = Math.max(0, hl.getBoundingClientRect().top - anchorsRect.top);
+      positioned.forEach(({ item, anchorY }) => {
         const top = Math.max(anchorY, cursor);
         item.classList.toggle('is-offset', top > anchorY + 4);
         item.style.position = 'absolute';
@@ -1265,17 +1209,22 @@ const formattedDate = date
     async function deleteAnnotation(id: string) {
       const target = anns.find((a) => a.id === id);
       if (!target || (backendActive && !canManage(target))) return;
+      if (!backendActive) {
+        setStatus('云端未连接,无法删除', 'err');
+        setTimeout(() => setStatus('', 'plain'), 4000);
+        return;
+      }
 
       const prev = anns;
       anns = anns.filter((a) => a.id !== id);
       refreshView();
 
-      if (!backendActive) {
-        saveLegacy(anns);
-        return;
-      }
       try {
-        await api.removeAnnotation(id);
+        // 管理员删除他人批注时必须用独立的管理员会话;
+        // 若沿用匿名访客会话,RLS 会静默删除 0 行,刷新后批注就会“复活”。
+        await api.removeAnnotation(id, isAdmin && !target.mine);
+        // 服务端删除成功后同步清掉本机只读镜像。
+        removeCacheRow(id);
       } catch (err) {
         anns = prev;
         refreshView();
@@ -1302,14 +1251,9 @@ const formattedDate = date
         await refreshFromServer();
       } catch (err) {
         console.error('[批注] 云端同步失败:', err);
-        const cached = readCache();
-        if (cached.length) {
-          anns = cached;
-          setStatus('云端不可用,展示缓存', 'err');
-        } else {
-          anns = legacyToAnn(legacyListRaw());
-          setStatus('云端不可用,仅本机可见', 'err');
-        }
+        // 云端不可用时只展示只读镜像;镜像里没有就显示为空,绝不回退到本机批注存储。
+        anns = readCache();
+        setStatus(anns.length ? '云端不可用,展示缓存' : '云端不可用', 'err');
         refreshView();
       }
     }
@@ -1387,7 +1331,7 @@ const formattedDate = date
 
     /** 编辑批注浮层:仅本人批注可进入(点击卡片或 ✎ 按钮) */
     function openEditPopup(ann: Ann, x: number, y: number) {
-      if (!ann.mine) return;
+      if (!ann.mine || !backendActive) return;
       editing = ann;
       popupTitle.textContent = '编辑批注';
       popupText.textContent = ann.text;
@@ -1415,15 +1359,11 @@ const formattedDate = date
           showError('正在连接云端,请稍候再试');
           return;
         }
-        saveBtn.disabled = true;
         if (!backendActive) {
-          anns = anns.map((a) => (a.id === target.id ? { ...a, note } : a));
-          saveLegacy(anns);
-          saveBtn.disabled = false;
-          hidePopup();
-          refreshView();
+          showError('云端未连接,无法编辑批注');
           return;
         }
+        saveBtn.disabled = true;
         try {
           const row = await api.updateAnnotation(target.id, note);
           anns = anns.map((a) => (a.id === target.id ? rowToAnn(row as any) : a));
@@ -1445,29 +1385,13 @@ const formattedDate = date
         showError('正在连接云端,请稍候再试');
         return;
       }
+      if (!backendActive) {
+        showError('云端未连接,无法保存批注');
+        return;
+      }
 
       const quote = currentSelection.text;
       saveBtn.disabled = true;
-
-      if (!backendActive) {
-        // 本机模式:直接落到 localStorage
-        const local: Ann = {
-          id: crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
-          text: quote,
-          note,
-          createdAt: Date.now(),
-          mine: true,
-        };
-        anns = [...anns, local];
-        saveLegacy(anns);
-        saveBtn.disabled = false;
-        hidePopup();
-        currentSelection = null;
-        refreshView();
-        return;
-      }
 
       try {
         const row = await api.createAnnotation({
@@ -1576,6 +1500,7 @@ const formattedDate = date
       } else if (evt.type === 'delete') {
         if (!anns.some((a) => a.id === evt.row.id)) return;
         anns = anns.filter((a) => a.id !== evt.row.id);
+        removeCacheRow(evt.row.id);
         refreshView();
       } else if (evt.type === 'update') {
         const i = anns.findIndex((a) => a.id === evt.row.id);
@@ -1590,9 +1515,8 @@ const formattedDate = date
     // ---------- 启动 ----------
     async function boot() {
       if (!serverMode) {
-        // 构建时未配置 Supabase:旧版纯本机模式
-        anns = legacyToAnn(legacyListRaw());
-        setStatus('仅本机', 'plain');
+        // 未配置 Supabase:批注功能不可用,不再降级到本机批注存储
+        setStatus('批注后端未配置', 'err');
         bootDone = true;
         refreshView();
         return;
@@ -1601,19 +1525,18 @@ const formattedDate = date
       setStatus('同步中…', 'wait');
       const uid = await api.ensureAnonymousIdentity();
       if (!uid) {
-        // 匿名身份不可用(未开启 Anonymous sign-ins / 隐私模式):降级本机
-        anns = legacyToAnn(legacyListRaw());
-        setStatus('仅本机', 'err');
+        // 匿名身份不可用时只读展示云端镜像,不降级到本机批注存储
+        anns = readCache();
+        setStatus(anns.length ? '云端身份不可用,展示缓存' : '云端身份不可用', 'err');
         bootDone = true;
         refreshView();
         return;
       }
 
-      // 先订阅实时事件(避免错过两次拉取间隙的他人新增),再拉全量数据;
-      // 随后静默自动导入本机遗留的旧版批注(失败自动保留,下次再试)
+      // 先订阅实时事件(避免错过两次拉取间隙的他人新增),再拉全量数据。
+      // 不再从本机导入/读取旧版批注。
       api.subscribePage(pageKey, onRemoteChange);
       await refreshFromServerSafe();
-      await autoImportLegacy();
       bootDone = true;
     }
 

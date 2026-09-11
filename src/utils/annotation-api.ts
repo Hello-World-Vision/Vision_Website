@@ -6,8 +6,8 @@
 //   - 按 page_path 拉取/新增/删除批注;
 //   - Realtime 订阅同页批注变化,让其他访问者实时看到新批注。
 //
-// 所有函数在未配置 Supabase(SUPABASE_ENABLED=false)时不调用,
-// 由调用方(annotations 脚本)回退到纯本机 localStorage 模式。
+// 批注数据只存 Supabase;调用方在未配置或云端不可用时只读展示镜像/提示错误,
+// 不再回退到本机 localStorage 批注存储。
 // =============================================================================
 
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
@@ -244,11 +244,32 @@ export async function updateAnnotation(id: string, note: string): Promise<Annota
   return data as AnnotationRow;
 }
 
-/** 删除一条批注(RLS 保证仅本人可删,他人会被服务端拒绝) */
-export async function removeAnnotation(id: string): Promise<void> {
-  const sb = getClient();
-  const { error } = await sb.from('annotations').delete().eq('id', id);
+/**
+ * 删除一条批注。
+ *
+ * asAdmin=true 时使用独立的管理员会话(getAdminClient);普通删除使用访客会话。
+ * 这里必须显式 .select('id') 校验删除结果:RLS 过滤掉所有行时 PostgREST
+ * 仍会返回成功,只有返回行为空才能区分“已删除”和“无权删除”。
+ */
+export async function removeAnnotation(id: string, asAdmin = false): Promise<void> {
+  const sb = asAdmin ? getAdminClient() : getClient();
+  const { data, error } = await sb
+    .from('annotations')
+    .delete()
+    .eq('id', id)
+    .select('id');
   if (error) throw new Error(`删除批注失败: ${errorMessage(error)}`);
+
+  if (!data || data.length === 0) {
+    // 0 行可能表示无权删除,也可能表示记录已经不存在(幂等删除)。
+    const { data: stillExists, error: checkError } = await sb
+      .from('annotations')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+    if (checkError) throw new Error(`删除批注失败: ${errorMessage(checkError)}`);
+    if (stillExists) throw new Error('删除失败:当前身份没有删除该批注的权限');
+  }
 }
 
 /** 订阅某页面的批注变化;返回取消订阅函数 */
