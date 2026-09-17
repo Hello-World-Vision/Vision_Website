@@ -1,489 +1,110 @@
 ---
-title: "OpenCV 传统视觉"
-description: "面向 RoboMaster 视觉组新成员的 OpenCV 与传统计算机视觉入门 —— 从基本数据结构、图像处理 API 到灯条与装甲板二维检测。"
+title: "OpenCV 基础与自瞄用法"
+description: "面向 RoboMaster 视觉组新成员的 OpenCV 入门：先弄清图像、像素与坐标，再看 OpenCV 在自瞄工程里真实承担的工作。"
 author: "HH"
-date: 2026-08-10
-tags: ["OpenCV", "图像处理", "传统视觉", "RoboMaster"]
+date: 2026-09-17
+tags: ["OpenCV", "图像处理", "RoboMaster"]
 status: done
 draft: false
 ---
+这篇分两部分。第一部分讲清楚图像在 OpenCV 里是什么、怎么读写像素，这是后面所有代码的地基；第二部分直接进项目代码，看 OpenCV 在自瞄里具体干了哪些活。
 
-> 本文面向第一次系统学习 OpenCV C++ 与传统计算机视觉的读者，分两步走：先学会使用 OpenCV 的常见对象与 API，再把这些基础工具组合成一个可解释、可调试的传统视觉 Detector。建议边读边编译，动手修改示例参数，观察结果的变化。
+先把一件事说清楚，免得对不上号：本项目的装甲板、能量机关是**关键点神经网络**识别的，不是传统视觉。OpenCV 在这里不负责"认出装甲板"，它负责取图、把图喂给网络前的尺寸处理、解析网络输出的框和关键点、NMS 去重、把结果画到图上、PnP 解算、录像。
 
-### 建议先收藏的 OpenCV 官方资料
+下表是 OpenCV 在 `autoaim_sentry_2025` 里的全部落点，后文逐个展开：
 
-OpenCV 的 API 很多，靠死记不是好办法。遇到参数、数据类型或版本行为不确定时，先查官方文档：
+| 文件                                               | 位置     | OpenCV 做的事                                                                            |
+| -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `autoaim_camera/src/camera_node.cpp`             | 116–172 | 从海康 SDK 的原始 buffer 构造`cv::Mat`，`resize` 到模型输入尺寸，再填进 ROS 图像消息 |
+| `autoaim_detector/src/detector_node.cpp`         | 127      | `cv_bridge::toCvCopy` 把 ROS 图像消息转成 `cv::Mat`                                  |
+| `autoaim_detector/src/openvino_infer_engine.cpp` | 60–100  | 用`cv::Rect` 存检测框、`cv::Point2f` 存关键点、`cv::dnn::NMSBoxes` 做非极大值抑制  |
+| `autoaim_detector/src/detector_node.cpp`         | 163–231 | `line` / `drawMarker` / `putText` 把检测结果画到调试图上                           |
+| `autoaim_locator/src/pnp_solver.cpp`             | 91–179  | `solvePnPGeneric` 解位姿，`cv2eigen` 转成 Eigen，供 TF 使用                          |
+| `autoaim_recorder/src/recorder_node.cpp`         | 142–199 | `cv::VideoWriter` 录视频，`clone` 后叠加状态信息                                     |
 
-- **OpenCV Tutorials 总目录**  
-  https://docs.opencv.org/4.x/d9/df8/tutorial_root.html
-- **Linux 官方安装教程**  
-  https://docs.opencv.org/4.x/d7/d9f/tutorial_linux_install.html
-- **Core 模块教程：`Mat`、图像数据与基础运算**  
-  https://docs.opencv.org/4.x/de/d7a/tutorial_table_of_content_core.html
-- **Image Processing (`imgproc`) 教程目录**  
-  https://docs.opencv.org/4.x/d7/da8/tutorial_table_of_content_imgproc.html
-- **`cv::Mat` 官方入门教程**  
-  https://docs.opencv.org/4.x/d6/d6d/tutorial_mat_the_basic_image_container.html
+所以本文不教 `threshold`、形态学、`findContours` 那一套传统视觉检测。本项目识别不走那条路，学了也没有对应代码可读。这些工具本身有价值，但不属于这份教程。这里只保留读懂上述代码所必需的图像基础。
 
-> 本文使用 **C++17 + OpenCV 4.x 风格 API**。如果你的本机版本不同，具体函数签名和行为以当前版本官方文档为准。
+## 官方资料
+
+OpenCV 的 API 很多，不要死记硬背，可以查官方文档 or 问ai：
+
+- **Tutorials 总目录**：https://docs.opencv.org/4.x/d9/df8/tutorial_root.html
+- **`cv::Mat` 入门**：https://docs.opencv.org/4.x/d6/d6d/tutorial_mat_the_basic_image_container.html
+- **Core 模块教程**：https://docs.opencv.org/4.x/de/d7a/tutorial_table_of_content_core.html
+- **Image Processing 教程**：https://docs.opencv.org/4.x/d7/da8/tutorial_table_of_content_imgproc.html
 
 ---
 
-## 安装 OpenCV：先把环境跑通
+## 安装 OpenCV
 
-对 Ubuntu 新人来说，最省事的方式是直接用发行版软件源安装 OpenCV C++ 开发包。执行：
+安装：
 
 ```bash
-# 更新 apt 软件包索引。
 sudo apt update
-
-# 安装：
-# - libopencv-dev：OpenCV 的 C++ 头文件、动态库和 CMake 配置；
-# - pkg-config：用于在命令行查询 OpenCV 的编译/链接参数；
-# - cmake、g++：后续示例工程需要的基本构建工具。
 sudo apt install -y libopencv-dev pkg-config cmake g++
 ```
 
-安装完成后先确认系统能够找到 OpenCV：
+确认安装成功：
 
 ```bash
-# 输出系统当前安装的 OpenCV 版本。
 pkg-config --modversion opencv4
-
-# 如果希望查看编译器需要的 include / link 参数，可以执行：
 pkg-config --cflags --libs opencv4
 ```
 
-如果第一条命令能输出类似 `4.x.x` 的版本号，说明基础安装已经完成。Ubuntu 软件源里的 OpenCV 版本可能落后于官方最新版，但对本文涉及的 `Mat`、`cvtColor`、`threshold`、`findContours`、`minAreaRect` 等基础内容通常够用。
-
-如果确实需要指定版本、`opencv_contrib`、特殊编译选项，或者想自己控制 CUDA / GUI / codec 等依赖，再照上面的 **Linux 官方安装教程** 用 CMake 从源码构建。新人阶段没有明确需求时，不建议一上来就自行编译整套 OpenCV。
-
 ---
 
-## 0. 先建立整体认识
+# 第一部分：图像基础
 
-一套 RoboMaster 自瞄系统大致可以抽象成这样一条链路：
+## 1. 图像是矩阵
+
+如下图，一张 8 bit 灰度图是二维数组，每个位置一个 `0~255` 的亮度值。一张 8 bit 彩色图每个位置存 3 个数。OpenCV 用 `cv::Mat` 承载它们，Mat即Matrix，意为矩阵。
+
+![人眼看到的是图像，计算机处理的是像素数值矩阵](images/opencv.png)
+
+image对象的基础数据：
+
+```cpp
+cv::Mat image = cv::imread("test.jpg", cv::IMREAD_COLOR);
+
+std::cout << image.rows << '\n';       // 行数 = 高
+std::cout << image.cols << '\n';       // 列数 = 宽
+std::cout << image.channels() << '\n'; // 通道数 彩色 3 （RGB或者HSV） ，灰度 1（黑白）
+std::cout << image.depth() << '\n';    // 单通道元素类型，8U 时为 CV_8U
+std::cout << image.type() << '\n';     // 通道数 + 元素类型，如 CV_8UC3
+std::cout << image.empty() << '\n';    // 是否为空
+```
+
+`type()` 是通道数和元素类型打包成的编码，常见几种：
+
+| 类型         | 含义                  | 场景                           |
+| ------------ | --------------------- | ------------------------------ |
+| `CV_8UC1`  | 8 bit 无符号，1 通道  | 灰度图、掩码                   |
+| `CV_8UC3`  | 8 bit 无符号，3 通道  | BGR 彩色图，相机图像的默认格式 |
+| `CV_16UC1` | 16 bit 无符号，1 通道 | 部分工业相机原图、深度图       |
+| `CV_32FC1` | 32 bit float，1 通道  | 浮点运算结果                   |
+| `CV_32FC3` | 32 bit float，3 通道  | 浮点三通道图                   |
+
+### 1.1 图片坐标系
+
+图像坐标系的原点在**左上角**，x 向右，y 向下。这一点和数学课的笛卡尔坐标系不同，写几何代码时容易搞反。
 
 ```text
-工业相机 → 图像 → 目标检测 → 目标二维特征 → 位姿解算 → 目标状态估计 → 弹道解算 → 云台控制
+(0,0) ──────▶ x
+  │
+  │   图像
+  ▼
+  y
 ```
 
-本文主要处理其中的前半段：
+### 1.2 读写一个像素
 
-```text
-Image → Preprocess → Binary / Feature Image → Geometric Candidates → Light → Armor → 2D Corners
-```
-
-读完本文，你应该能理解一个简化的 Detector 为什么最终会输出这样的数据：
+灰度图像素是 `uchar`：
 
 ```cpp
-struct Armor {
-    cv::Point2f center;
-    std::array<cv::Point2f, 4> corners;
-};
+uchar v = gray.at<uchar>(y, x);
 ```
 
-这里的 `center` 和 `corners` 都还是图像坐标系中的二维像素坐标。本文先把重点放在二维图像处理和目标几何提取上。
-
-还需要提前建立一个认识：OpenCV 提供的是工具，而不是现成的计算机视觉算法。它为我们准备了矩阵、图像读写、滤波、颜色转换、轮廓、几何拟合等基础能力；至于“哪个轮廓是灯条”“哪两根灯条能组成装甲板”，这些判断仍然要你根据目标先验自己建立特征和判据。
-
----
-
-# 第一部分：先学会使用 OpenCV
-
-## 1. 第一个 OpenCV 程序
-
-### 1.1 OpenCV 代码的常见模块
-
-OpenCV 是一个规模很大的计算机视觉库。新人阶段最常打交道的是下面几个模块：
-
-| 模块 | 常见头文件 | 主要用途 |
-| --- | --- | --- |
-| Core | `opencv2/core.hpp` | `Mat`、`Point`、`Rect`、`Scalar` 等基础数据结构与矩阵运算 |
-| Imgcodecs | `opencv2/imgcodecs.hpp` | `imread`、`imwrite`，图像文件读写 |
-| HighGUI | `opencv2/highgui.hpp` | `imshow`、`waitKey`、窗口与 Trackbar |
-| Imgproc | `opencv2/imgproc.hpp` | 颜色转换、滤波、阈值、形态学、轮廓、绘图等 |
-| VideoIO | `opencv2/videoio.hpp` | `VideoCapture`、视频文件和普通摄像头读取 |
-
-训练代码里也经常直接包含：
-
-```cpp
-#include <opencv2/opencv.hpp>
-```
-
-它会一次性引入大量常用的 OpenCV 头文件，刚入门时能省去不少配置负担。正式项目里可以再按模块需要逐个包含头文件。
-
-### 1.2 一个最小的 CMake 工程
-
-建立如下目录：
-
-```text
-opencv_demo/
-├── CMakeLists.txt
-└── main.cpp
-```
-
-`CMakeLists.txt`：
-
-```cmake
-# 本工程至少要求 CMake 3.16。
-cmake_minimum_required(VERSION 3.16)
-
-# 创建一个名为 opencv_demo 的 C++ 工程。
-project(opencv_demo LANGUAGES CXX)
-
-# 本文示例统一使用 C++17。
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# 查找系统已经安装的 OpenCV。
-# REQUIRED 表示：如果找不到 OpenCV，CMake 直接报错停止配置，
-# 而不是继续生成一个无法链接的工程。
-find_package(OpenCV REQUIRED)
-
-# 把 main.cpp 编译成可执行文件 opencv_demo。
-add_executable(opencv_demo main.cpp)
-
-# OpenCV_INCLUDE_DIRS 保存 OpenCV 头文件所在路径，
-# 这样 #include <opencv2/opencv.hpp> 才能够被编译器找到。
-target_include_directories(
-    opencv_demo
-    PRIVATE
-    ${OpenCV_INCLUDE_DIRS}
-)
-
-# OpenCV_LIBS 保存当前 OpenCV 安装所需要链接的库。
-# 不链接这些库时，代码可能能通过头文件编译，
-# 但最终会在链接阶段出现 undefined reference。
-target_link_libraries(
-    opencv_demo
-    PRIVATE
-    ${OpenCV_LIBS}
-)
-```
-
-编译：
-
-```bash
-mkdir -p build
-cd build
-cmake ..
-cmake --build . -j
-```
-
-运行：
-
-```bash
-./opencv_demo ../test.jpg
-```
-
-### 1.3 完整示例一：读图、查看属性、ROI、绘制、显示和保存
-
-下面这段代码没有复杂算法，只是让你第一次看到常用的 OpenCV 对象怎样配合工作。建议真的编译运行一遍，再逐行改参数观察结果。
-
-```cpp
-#include <opencv2/opencv.hpp>
-
-#include <iostream>
-#include <string>
-
-int main(int argc, char** argv)
-{
-    // argc 是命令行参数数量，argv 是每个参数对应的字符串。
-    // 这里要求用户在运行程序时额外提供一张图片的路径：
-    // ./opencv_demo ../test.jpg
-    if (argc < 2) {
-        std::cerr
-            << "Usage: "
-            << argv[0]
-            << " <image_path>\n";
-        return 1;
-    }
-
-    // argv[1] 就是用户传入的图片路径。
-    const std::string image_path = argv[1];
-
-    // imread() 从磁盘读取图片并返回 cv::Mat。
-    // IMREAD_COLOR 表示以 3 通道彩色图读取。
-    // 在 OpenCV 中常规彩色图的通道顺序是 BGR，而不是 RGB。
-    cv::Mat image =
-        cv::imread(image_path, cv::IMREAD_COLOR);
-
-    // OpenCV 的很多函数遇到错误时不会抛出 C++ 异常。
-    // imread() 读取失败时，通常得到一个 empty Mat，
-    // 因此读取文件后第一件事应该检查 image.empty()。
-    if (image.empty()) {
-        std::cerr
-            << "Failed to read image: "
-            << image_path
-            << '\n';
-        return 1;
-    }
-
-    // rows = 行数 = 图像高度；
-    // cols = 列数 = 图像宽度。
-    std::cout << "width    = " << image.cols << '\n';
-    std::cout << "height   = " << image.rows << '\n';
-
-    // channels() 返回通道数量。
-    // 常见 BGR 图为 3，灰度图为 1。
-    std::cout
-        << "channels = "
-        << image.channels()
-        << '\n';
-
-    // type() 返回 OpenCV 内部的类型编码。
-    // 例如常见 BGR 图通常是 CV_8UC3。
-    std::cout
-        << "type     = "
-        << image.type()
-        << '\n';
-
-    // 取图像中心像素。
-    const int x = image.cols / 2;
-    const int y = image.rows / 2;
-
-    // 对 CV_8UC3 图像，一个像素可以用 cv::Vec3b 表示：
-    // 3 = 三个通道，b = unsigned char / byte。
-    //
-    // 注意 at() 的两个二维下标是 (row, col)，
-    // 也就是 (y, x)，不是平时说坐标时习惯的 (x, y)。
-    const cv::Vec3b pixel =
-        image.at<cv::Vec3b>(y, x);
-
-    // Vec3b 的通道顺序：
-    // pixel[0] = Blue
-    // pixel[1] = Green
-    // pixel[2] = Red
-    std::cout
-        << "center pixel BGR = "
-        << static_cast<int>(pixel[0]) << ", "
-        << static_cast<int>(pixel[1]) << ", "
-        << static_cast<int>(pixel[2]) << '\n';
-
-    // 构造一个位于图像中央、宽高都是原图一半的 ROI。
-    const int roi_width  = image.cols / 2;
-    const int roi_height = image.rows / 2;
-    const int roi_x =
-        (image.cols - roi_width) / 2;
-    const int roi_y =
-        (image.rows - roi_height) / 2;
-
-    // Rect(x, y, width, height)：
-    // (x, y) 是矩形左上角，后两个参数是宽和高。
-    const cv::Rect roi_rect(
-        roi_x,
-        roi_y,
-        roi_width,
-        roi_height
-    );
-
-    // image(roi_rect) 并没有复制 ROI 中所有像素。
-    // roi 通常只是一个指向原 image 局部区域的 Mat 视图，
-    // 修改 roi 中的像素也可能同时修改 image。
-    cv::Mat roi = image(roi_rect);
-
-    // 为了在调试图上画框，同时保留 image 原始内容，
-    // 这里显式使用 clone() 做一次深拷贝。
-    cv::Mat debug = image.clone();
-
-    // 对普通 BGR 图像，Scalar 的前三个值同样按 B、G、R 排列。
-    const cv::Scalar green(0, 255, 0);
-    const cv::Scalar red(0, 0, 255);
-
-    // 在 debug 上画出 ROI 边界。
-    // 最后的 2 表示线宽为 2 像素。
-    cv::rectangle(
-        debug,
-        roi_rect,
-        green,
-        2
-    );
-
-    // 在图像中心画一个实心红点。
-    cv::circle(
-        debug,
-        cv::Point(x, y),
-        6,
-        red,
-        cv::FILLED
-    );
-
-    // 在图像左上角绘制文字。
-    // FONT_HERSHEY_SIMPLEX 是字体；
-    // 1.0 是字体缩放系数；
-    // 最后的 2 是文字线宽。
-    cv::putText(
-        debug,
-        "OpenCV demo",
-        cv::Point(20, 40),
-        cv::FONT_HERSHEY_SIMPLEX,
-        1.0,
-        green,
-        2
-    );
-
-    // imshow() 只负责把 Mat 提交给 GUI 窗口显示。
-    cv::imshow("original", image);
-    cv::imshow("roi", roi);
-    cv::imshow("debug", debug);
-
-    // 把调试图写回磁盘。
-    // 文件扩展名会影响最终编码格式。
-    if (!cv::imwrite("debug_output.jpg", debug)) {
-        std::cerr
-            << "Failed to save debug_output.jpg\n";
-    }
-
-    // HighGUI 的窗口刷新和键盘事件由 waitKey() 驱动。
-    // waitKey(0) 表示一直等待，直到用户按键。
-    cv::waitKey(0);
-
-    return 0;
-}
-```
-
-这一个程序就已经用上了 `cv::Mat`、`cv::Vec3b`、`cv::Rect`、`cv::Point`、`cv::Scalar`、`imread`、`imwrite`、`rectangle`、`circle`、`putText`、`imshow` 和 `waitKey`。不要急着背函数参数，先弄清每个对象代表什么、每一步的输入和输出是什么。
-
----
-
-## 2. OpenCV 最常见的数据结构
-
-读 OpenCV C++ 代码的门槛，往往不在函数多，而在几个会反复出现的数据结构上。先把这些对象看懂，后面读视觉代码会轻松很多。
-
-| 类型 | 含义 | 常见用途 |
-| --- | --- | --- |
-| `cv::Mat` | 多维稠密数组，图像最常见的载体 | 图像、Mask、矩阵、中间结果 |
-| `cv::Point` / `Point2f` | 二维点 | 像素坐标、中心、角点 |
-| `cv::Point3f` | 三维点 | 后续 PnP、空间几何 |
-| `cv::Size` / `Size2f` | 宽和高 | 图像尺寸、卷积核尺寸、矩形尺寸 |
-| `cv::Rect` / `Rect2f` | 水平矩形 | ROI、Bounding Box |
-| `cv::Scalar` | 最多四个标量组成的值 | 颜色、上下阈值、矩阵初始化 |
-| `cv::Vec3b` | 长度为 3 的 `uchar` 向量 | 读取一个 BGR 像素 |
-| `cv::RotatedRect` | 带中心、尺寸和角度的旋转矩形 | 细长目标、灯条几何拟合 |
-| `cv::Moments` | 图像/轮廓矩 | 面积、质心等形状信息 |
-
-### 2.1 `cv::Point`：坐标最基础的表达
-
-```cpp
-cv::Point p1(100, 50);          // int
-cv::Point2f p2(100.5f, 50.2f); // float
-
-std::cout << p2.x << ", " << p2.y << '\n';
-```
-
-图像坐标系的原点在左上角，`x` 向右、`y` 向下。注意它和数学课上常用的笛卡尔坐标系不一样。
-
-### 2.2 `cv::Size`：宽和高
-
-```cpp
-cv::Size image_size(1280, 1024);
-cv::Size kernel_size(5, 5);
-
-std::cout << image_size.width << '\n';
-std::cout << image_size.height << '\n';
-```
-
-OpenCV 里 `Size(width, height)` 的顺序和 `Mat(rows, cols)` 不同，新人要有意识地区分“宽高”和“行列”。
-
-### 2.3 `cv::Rect`：水平矩形和 ROI
-
-```cpp
-cv::Rect rect(100, 80, 300, 200);
-// x = 100, y = 80, width = 300, height = 200
-
-cv::Mat roi = image(rect);
-```
-
-`image(rect)` 默认是**视图**，与原图共享底层数据。如果希望得到完全独立的 ROI：
-
-```cpp
-cv::Mat roi_copy = image(rect).clone();
-```
-
-### 2.4 `cv::Scalar`：颜色和多通道常量
-
-```cpp
-cv::Scalar blue(255, 0, 0);
-cv::Scalar green(0, 255, 0);
-cv::Scalar red(0, 0, 255);
-```
-
-对于普通 BGR 图像，顺序同样是 B、G、R。`Scalar` 还常用于 `inRange`：
-
-```cpp
-cv::Scalar lower_hsv(90, 80, 80);
-cv::Scalar upper_hsv(130, 255, 255);
-```
-
-### 2.5 `cv::RotatedRect`
-
-```cpp
-cv::RotatedRect rotated(
-    cv::Point2f(300.0f, 200.0f),
-    cv::Size2f(40.0f, 120.0f),
-    20.0f
-);
-
-cv::Point2f vertices[4];
-rotated.points(vertices);
-```
-
-它保存中心 `center`、尺寸 `size` 和角度 `angle`。在比赛代码中，最好不要让 OpenCV 自身的宽高和角度约定直接扩散到整个工程，而是在 Detector 内部把它转换成战队自己定义的 `Light`，统一“长边”“短边”“倾角”的含义。
-
----
-
-## 3. `cv::Mat`：OpenCV 最重要的对象
-
-### 3.1 图像的本质
-
-一张 8 bit 灰度图可以看成一个二维数组，每个位置存一个 `0~255` 的亮度值；普通 8 bit BGR 彩色图则是一个每个位置存 3 个 `uchar` 数值的二维数组。
-
-![OpenCV 官方教程用一块局部区域说明：人眼看到的是图像，计算机实际处理的是像素数值矩阵](images/opencv.png)
-
-*图：OpenCV 官方 `Mat - The Basic Image Container` 教程中的示意图，说明了为什么 `cv::Mat` 是学习 OpenCV 的起点。*
-
-常见 `Mat` 类型：
-
-| 类型 | 含义 | 常见场景 |
-| --- | --- | --- |
-| `CV_8UC1` | 8 bit 无符号、1 通道 | 灰度图、二值图 |
-| `CV_8UC3` | 8 bit 无符号、3 通道 | BGR 彩色图 |
-| `CV_16UC1` | 16 bit 无符号、1 通道 | 部分深度图、工业相机数据 |
-| `CV_32FC1` | 32 bit float、1 通道 | 浮点计算结果 |
-| `CV_32FC3` | 32 bit float、3 通道 | 浮点三通道图像 |
-
-你可以用这些接口查看一张 `Mat`：
-
-```cpp
-std::cout << image.rows << '\n';
-std::cout << image.cols << '\n';
-std::cout << image.channels() << '\n';
-std::cout << image.depth() << '\n';
-std::cout << image.type() << '\n';
-std::cout << image.size() << '\n';
-std::cout << std::boolalpha << image.empty() << '\n';
-```
-
-### 3.2 浅拷贝与深拷贝
-
-```cpp
-cv::Mat a = image;         // 通常共享底层数据
-cv::Mat b = image.clone(); // 独立复制
-image.copyTo(b);           // 也是显式复制
-```
-
-`cv::Mat` 内部用引用计数管理数据，因此普通赋值通常不会复制整张图。如果 `a` 和 `image` 共享数据，修改其中一个的像素可能同时影响另一个。这个特性很高效，但也容易制造隐蔽的 bug，所以要随时清楚“手上这个 Mat 是视图还是独立数据”。
-
-### 3.3 像素访问
-
-灰度图：
-
-```cpp
-uchar value = gray.at<uchar>(y, x);
-```
-
-BGR 图：
+彩色图像素是 `cv::Vec3b`（3 个 `uchar`）：
 
 ```cpp
 cv::Vec3b pixel = image.at<cv::Vec3b>(y, x);
@@ -493,61 +114,42 @@ uchar g = pixel[1];
 uchar r = pixel[2];
 ```
 
-这里再强调一遍：`at` 常用的二维索引是 `(row, col)`，也就是 `(y, x)`。
+注意：
 
-对大图逐像素循环时，`at()` 适合教学和低频访问；需要高性能连续遍历时，常见做法是按行取 `ptr<T>()`：
+1. `at<T>()` 的下标是 `(row, col)`，也就是 `(y, x)`，不是 `(x, y)`。
+2. 通道顺序是 **B、G、R**，不是 RGB。`pixel[0]` 是Blue通道。
 
-```cpp
-for (int y = 0; y < gray.rows; ++y) {
-    uchar* row = gray.ptr<uchar>(y);
+知道了像素下标规则，就能看懂项目里所有逐像素的代码。
 
-    for (int x = 0; x < gray.cols; ++x) {
-        if (row[x] > 200) {
-            row[x] = 255;
-        }
-    }
-}
-```
+### 1.3 浅拷贝与深拷贝
 
-新人阶段先保证正确性和可读性，不要在没有 Profile 的情况下为了“可能更快”写复杂的指针代码。
-
----
-
-## 4. 图像与视频的输入输出
-
-### 4.1 `imread`、`imwrite`
+`cv::Mat` 内部用引用计数管理数据，赋值不等于复制像素：
 
 ```cpp
-cv::Mat color = cv::imread("image.jpg", cv::IMREAD_COLOR);
-cv::Mat gray  = cv::imread("image.jpg", cv::IMREAD_GRAYSCALE);
-
-if (color.empty()) {
-    // 读取失败
-}
-
-cv::imwrite("result.png", color);
+cv::Mat a = image;          // 共享数据，改 a 可能改到 image
+cv::Mat b = image.clone();  // 独立复制，各改各的
+image.copyTo(b);            // 也是显式复制
 ```
 
-不要假设文件一定读得进来。路径写错、工作目录不对、文件损坏，都可能让 `imread` 返回空图。
+这个特性省内存，但不注意会制造隐蔽 bug。`clone()`常用于不想污染原图的情况下修改 Mat。
 
-### 4.2 `imshow`、`waitKey`
+### 1.4 常见几何对象
 
 ```cpp
-cv::imshow("image", image);
+cv::Point p(100, 50);            // int 点
+cv::Point2f pf(100.5f, 50.2f);   // float 点，像素坐标和关键点
+cv::Point3f p3(0.f, 0.1f, 0.2f); // 三维点，PnP 的物体点
+cv::Size s(1280, 768);           // 宽、高
 
-int key = cv::waitKey(1);
-if (key == 27) {
-    // ESC
-}
+cv::Rect r(100, 80, 300, 200);   // x, y, width, height
+cv::Scalar color(0, 255, 0);     // 多通道常量，BGR 顺序
 ```
 
-处理视频时，`waitKey(1)` 常用来刷新窗口并读取键盘输入。GUI 调试很方便，但正式上车的程序通常不会依赖 GUI 窗口。
+注意 `Rect` 是 `(x, y, w, h)`，而 `Mat` 是 `(rows, cols)`。
 
-### 4.3 `VideoCapture`
+`image(rect)` 取出的 ROI 是**视图**，与原图共享数据；要独立就 `.clone()`。
 
-`VideoCapture` 可以读取普通视频文件，也可以打开系统摄像头。RM 项目里的工业相机往往通过厂商 SDK 取流，不一定走 `VideoCapture`，但先理解这个接口，新人就能用普通视频做离线实验。
-
-#### 完整示例二：读取视频并实时处理
+## 2. 第一个程序
 
 ```cpp
 #include <opencv2/opencv.hpp>
@@ -557,1519 +159,609 @@ if (key == 27) {
 
 int main(int argc, char** argv)
 {
-    // 运行方式：
-    // ./opencv_demo ../test.mp4
-    if (argc < 2) {
-        std::cerr
-            << "Usage: "
-            << argv[0]
-            << " <video_path>\n";
-        return 1;
-    }
-
-    // VideoCapture 可以读取视频文件，也可以打开普通摄像头。
-    // 传入字符串路径时，OpenCV 会尝试使用可用的视频后端解码文件。
-    cv::VideoCapture capture(argv[1]);
-
-    // 视频打开失败时必须立即停止。
-    // 常见原因包括：路径错误、文件损坏、缺少对应 codec/backend。
-    if (!capture.isOpened()) {
-        std::cerr << "Failed to open video.\n";
-        return 1;
-    }
-
-    // frame 用于保存每次从视频流中读取的一帧。
-    // read() 会在需要时为 Mat 分配或复用内存。
-    cv::Mat frame;
-
-    // capture.read(frame) 成功读取一帧时返回 true；
-    // 到达视频末尾或读取失败时返回 false。
-    while (capture.read(frame)) {
-        if (frame.empty()) {
-            break;
-        }
-
-        cv::Mat gray;
-        cv::Mat blurred;
-        cv::Mat edges;
-
-        // BGR 彩色图 -> 单通道灰度图。
-        // Canny 主要处理亮度梯度，因此通常先转 Gray。
-        cv::cvtColor(
-            frame,
-            gray,
-            cv::COLOR_BGR2GRAY
-        );
-
-        // 高斯滤波抑制一部分高频噪声。
-        // Size(5, 5) 是卷积核尺寸，1.2 是高斯 sigma。
-        // 这里单独输出 blurred，避免把 gray 原地覆盖，
-        // 新人调试时更容易同时查看不同阶段的结果。
-        cv::GaussianBlur(
-            gray,
-            blurred,
-            cv::Size(5, 5),
-            1.2
-        );
-
-        // Canny 根据局部梯度寻找边缘。
-        // 80 和 160 是低、高阈值，只是教程示例参数。
-        cv::Canny(
-            blurred,
-            edges,
-            80,
-            160
-        );
-
-        // 同时显示原始帧和边缘图，
-        // 可以直观看到“输入 -> 中间结果”的变化。
-        cv::imshow("frame", frame);
-        cv::imshow("gray", gray);
-        cv::imshow("edges", edges);
-
-        // waitKey(1) 最多等待约 1 ms，同时让 HighGUI 刷新窗口。
-        // 返回值是按键码；ESC=27，或者按 q 时退出循环。
-        const int key = cv::waitKey(1);
-        if (key == 27 || key == 'q') {
-            break;
-        }
-    }
-
-    // capture 离开作用域时会自动释放资源；
-    // 也可以显式调用 capture.release()。
-    return 0;
-}
-```
-
-这段代码已经很接近真实视觉程序的最小循环：取一帧、处理、输出结果、进入下一帧。后续的 Detector 只是在“处理”这一步里加入更多内容。
-
----
-
-# 第二部分：常见图像处理操作
-
-## 5. 颜色空间、通道与 Mask
-
-### 5.1 BGR、Gray、HSV
-
-OpenCV 里常规彩色图最常见的是 BGR。灰度图只保留单通道的亮度信息；HSV 把颜色拆成 Hue（色相）、Saturation（饱和度）和 Value（明度），在需要按颜色做规则分割时往往更直观。
-
-转换使用 `cvtColor`：
-
-```cpp
-cv::Mat gray;
-cv::Mat hsv;
-
-cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
-cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
-```
-
-对标准 8 bit 的 `COLOR_BGR2HSV` 转换，OpenCV 把 H 压缩到约 `0~179` 的整数范围，S、V 为 `0~255`。所以不要把网上以“角度 0~360°”表示的 HSV 数值原样抄进 OpenCV 阈值。
-
-### 5.2 `split` 和 `merge`
-
-如果需要单独访问通道：
-
-```cpp
-std::vector<cv::Mat> channels;
-cv::split(image, channels);
-
-cv::Mat blue  = channels[0];
-cv::Mat green = channels[1];
-cv::Mat red   = channels[2];
-
-cv::Mat merged;
-cv::merge(channels, merged);
-```
-
-传统 RM 视觉里有时也会直接构造通道差，例如 `B - R` 或 `R - B`，借敌我灯条的颜色差异增强目标。但它是否有效，取决于相机、曝光、赛场环境和数据，不能把某一种通道差当成固定模板。
-
-### 5.3 `inRange` 与 Mask
-
-```cpp
-cv::Scalar lower_blue(90, 80, 80);
-cv::Scalar upper_blue(130, 255, 255);
-
-cv::Mat mask;
-cv::inRange(hsv, lower_blue, upper_blue, mask);
-```
-
-`mask` 是一张 `CV_8UC1` 图像：满足范围的像素变成 255，不满足的像素变成 0。Mask 可以进一步用于提取原图内容：
-
-```cpp
-cv::Mat selected;
-cv::bitwise_and(image, image, selected, mask);
-```
-
-这里真正要做的，是把自然语言里的“颜色接近蓝色、足够饱和、足够亮”翻译成一段数值区间，`inRange` 只是执行这次翻译的工具。
-
----
-
-## 6. 尺寸变换与滤波
-
-### 6.1 `resize`
-
-```cpp
-cv::Mat resized;
-cv::resize(
-    image,
-    resized,
-    cv::Size(640, 480),
-    0.0,
-    0.0,
-    cv::INTER_LINEAR
-);
-```
-
-缩小图像可以减少后续计算量，但也会损失细节。不要为了追求 FPS 盲目降低分辨率，应该用数据确认目标在远距离时仍然保留足够多的像素。
-
-### 6.2 `GaussianBlur`
-
-```cpp
-cv::Mat blurred;
-cv::GaussianBlur(
-    gray,
-    blurred,
-    cv::Size(5, 5),
-    1.2
-);
-```
-
-高斯滤波常用于抑制高频噪声，让阈值或边缘检测更稳定。它同样会削弱细节，因此 kernel 越大并不代表效果越好。
-
-### 6.3 `medianBlur`
-
-```cpp
-cv::medianBlur(gray, blurred, 5);
-```
-
-中值滤波对椒盐这类孤立噪声效果尤其明显。实际工程中要根据噪声类型选择滤波方法，而不是把高斯滤波、中值滤波和形态学一股脑全叠加上去。
-
-### 6.4 其他常见函数
-
-新人后续读工程时还会遇到：
-
-```cpp
-cv::flip(...);       // 翻转
-cv::rotate(...);     // 旋转
-cv::normalize(...);  // 归一化
-cv::absdiff(...);    // 绝对差
-cv::minMaxLoc(...);  // 查找最小/最大值及位置
-cv::countNonZero(...);// 统计非零像素
-```
-
-这些不必在第一次学习时全部掌握，但要知道 OpenCV 里有这样一批基础的数组和图像操作。
-
----
-
-## 7. 二值化
-
-### 7.1 `threshold`
-
-```cpp
-cv::Mat binary;
-
-cv::threshold(
-    gray,
-    binary,
-    180,
-    255,
-    cv::THRESH_BINARY
-);
-```
-
-它把连续的灰度值分成两类：满足条件的像素变成前景，不满足的变成背景。固定阈值的优点是简单、快速、可解释，缺点是对曝光和光照变化敏感。
-
-![OpenCV 官方阈值教程示例：左侧为输入图像，右侧为按阈值分割后的结果](images/badapple.png)
-
-*图：OpenCV 官方 `Basic Thresholding Operations` 教程。二值化做的是按一个判据把连续像素值划分成前景和背景，而不只是把图片变成黑白。*
-
-常见阈值类型还包括：
-
-```cpp
-cv::THRESH_BINARY
-cv::THRESH_BINARY_INV
-cv::THRESH_TRUNC
-cv::THRESH_TOZERO
-cv::THRESH_OTSU
-```
-
-新人阶段先重点掌握 `THRESH_BINARY`，知道 Otsu 等自动阈值方法的存在即可。
-
-### 7.2 `adaptiveThreshold`
-
-```cpp
-cv::adaptiveThreshold(
-    gray,
-    binary,
-    255,
-    cv::ADAPTIVE_THRESH_GAUSSIAN_C,
-    cv::THRESH_BINARY,
-    11,
-    2
-);
-```
-
-自适应阈值按局部区域计算阈值，适合处理亮度分布不均的图像，但计算更复杂，也不见得就比固定阈值更适合 RM。比赛算法要用实际图像验证，而不是按“看起来更高级”来选函数。
-
----
-
-## 8. 形态学操作
-
-形态学主要处理二值图或 Mask 的局部结构。最常见的四个概念是腐蚀、膨胀、开运算和闭运算。
-
-先创建结构元素：
-
-```cpp
-cv::Mat kernel = cv::getStructuringElement(
-    cv::MORPH_RECT,
-    cv::Size(3, 3)
-);
-```
-
-然后可以：
-
-```cpp
-cv::erode(binary, eroded, kernel);
-cv::dilate(binary, dilated, kernel);
-
-cv::morphologyEx(
-    binary,
-    opened,
-    cv::MORPH_OPEN,
-    kernel
-);
-
-cv::morphologyEx(
-    binary,
-    closed,
-    cv::MORPH_CLOSE,
-    kernel
-);
-```
-
-直观理解：
-
-| 操作 | 直观效果 | 常见用途 |
-| --- | --- | --- |
-| Erode | 白色区域收缩 | 去掉细小突出、断开细连接 |
-| Dilate | 白色区域扩张 | 填补小裂缝、连接邻近区域 |
-| Open | 先腐蚀再膨胀 | 去除小白噪点 |
-| Close | 先膨胀再腐蚀 | 填补小黑洞、连接断裂目标 |
-
-
-形态学并不是每条 Pipeline 都要用的步骤。每加一次处理，就多一份计算量、多几个参数、多一种可能出错的方式；只有当它能稳定解决真实数据中的问题时，才值得加进来。
-
----
-
-## 9. 边缘检测
-
-最常见的边缘检测接口之一是 `Canny`：
-
-```cpp
-cv::Mat edges;
-cv::Canny(gray, edges, 80, 160);
-```
-
-边缘对应图像灰度变化剧烈的位置。它在轮廓、形状、标定板等任务中很常见，但 RoboMaster 灯条检测不一定要经过 Canny：如果颜色或亮度二值化已经得到干净的白色目标区域，直接找轮廓即可。
-
-这里也说明一点：学过某个函数，不等于就要把它塞进 Pipeline。用不用一个步骤，取决于它是否解决了当前的问题。
-
----
-
-# 第三部分：从像素到几何对象
-
-## 10. 轮廓 `findContours`
-
-### 10.1 Contour 的定义
-
-轮廓可以理解为一组按边界顺序排列的二维点。C++ 中最常见的存储形式是：
-
-```cpp
-std::vector<std::vector<cv::Point>> contours;
-```
-
-外层 `vector` 表示“有很多条轮廓”，内层 `vector<cv::Point>` 表示“一条轮廓由很多二维点组成”。
-
-最常用的调用：
-
-```cpp
-cv::findContours(
-    binary,
-    contours,
-    cv::RETR_EXTERNAL,
-    cv::CHAIN_APPROX_SIMPLE
-);
-```
-
-两个参数尤其需要理解：
-
-- `RETR_EXTERNAL`：只取最外层轮廓，适合许多目标候选提取的场景；
-- `CHAIN_APPROX_SIMPLE`：压缩共线点，通常能明显减少轮廓点的数量；
-- 与之相对的 `CHAIN_APPROX_NONE` 会保留边界上的全部点。对一个矩形来说，大量共线像素点并不提供新的几何信息，所以基础目标检测里往往优先用 `CHAIN_APPROX_SIMPLE`。
-
-![OpenCV 官方轮廓教程：左侧 CHAIN_APPROX_NONE 保存大量边界点，右侧 CHAIN_APPROX_SIMPLE 只保留必要拐点](images/contour.png)
-
-*图：OpenCV 官方 Contours 教程。示例中矩形使用 `CHAIN_APPROX_NONE` 时保存数百个点，而 `CHAIN_APPROX_SIMPLE` 可以压缩到少量拐点。*
-
-其他 Retrieval Mode（例如 `RETR_LIST`、`RETR_TREE`）等到需要轮廓层级关系时再学。
-
-### 10.2 轮廓的常用几何特征
-
-```cpp
-double area = cv::contourArea(contour);
-double perimeter = cv::arcLength(contour, true);
-
-cv::Rect box = cv::boundingRect(contour);
-cv::RotatedRect rotated = cv::minAreaRect(contour);
-
-cv::Moments m = cv::moments(contour);
-```
-
-质心可以通过 Moments 得到：
-
-```cpp
-if (std::abs(m.m00) > 1e-6) {
-    cv::Point2f center(
-        static_cast<float>(m.m10 / m.m00),
-        static_cast<float>(m.m01 / m.m00)
-    );
-}
-```
-
-此外还会遇到：
-
-```cpp
-cv::approxPolyDP(...); // 多边形近似
-cv::convexHull(...);   // 凸包
-cv::isContourConvex(...);
-```
-
-这些函数在矩形、标志物、特殊形状检测中很常见。本文主线不会逐一展开，但你要知道它们都属于“从轮廓里提取形状信息”这一类工具。
-
-### 10.3 完整示例三：颜色分割、形态学、轮廓和旋转矩形
-
-下面这段程序展示了一条完整而通用的传统视觉 Pipeline。它读取一张图片，在 HSV 中提取蓝色区域，做形态学处理，寻找轮廓，再用 `minAreaRect` 拟合候选区域。
-
-```cpp
-#include <opencv2/opencv.hpp>
-
-#include <iostream>
-#include <vector>
-
-int main(int argc, char** argv)
-{
-    if (argc < 2) {
-        std::cerr
-            << "Usage: "
-            << argv[0]
-            << " <image_path>\n";
-        return 1;
-    }
-
-    // 读取 BGR 彩色图。
-    cv::Mat image =
-        cv::imread(argv[1], cv::IMREAD_COLOR);
-
-    if (image.empty()) {
-        std::cerr << "Failed to read image.\n";
-        return 1;
-    }
-
-    // ---------- Stage 1: 颜色空间转换 ----------
-    //
-    // BGR 中“颜色”和“亮度”混在三个通道里。
-    // HSV 把 Hue / Saturation / Value 分开，
-    // 方便我们直接使用一个范围描述“蓝色且足够亮”。
-    cv::Mat hsv;
-    cv::cvtColor(
-        image,
-        hsv,
-        cv::COLOR_BGR2HSV
-    );
-
-    // ---------- Stage 2: 颜色范围分割 ----------
-    //
-    // lower_blue / upper_blue 是 HSV 三个通道的上下界。
-    // 下面的数值只用于教学演示，不是 RM 比赛标准参数。
-    //
-    // 对标准 8-bit OpenCV HSV：
-    // H 常用范围约为 [0, 179]；
-    // S、V 常用范围为 [0, 255]。
-    const cv::Scalar lower_blue(90, 80, 80);
-    const cv::Scalar upper_blue(130, 255, 255);
-
-    cv::Mat mask;
-    cv::inRange(
-        hsv,
-        lower_blue,
-        upper_blue,
-        mask
-    );
-
-    // mask 是 CV_8UC1 单通道图：
-    // 满足范围的像素 = 255（白）；
-    // 不满足范围的像素 = 0（黑）。
-
-    // ---------- Stage 3: 形态学去噪 ----------
-    //
-    // 先生成一个 3x3 矩形结构元素。
-    // kernel 的形状和大小会直接影响处理结果。
-    const cv::Mat kernel =
-        cv::getStructuringElement(
-            cv::MORPH_RECT,
-            cv::Size(3, 3)
-        );
-
-    cv::Mat cleaned;
-
-    // MORPH_OPEN = 先腐蚀，再膨胀。
-    // 对“白色前景 + 黑色背景”的二值图，
-    // 常用来去掉一些比目标小得多的孤立白点。
-    cv::morphologyEx(
-        mask,
-        cleaned,
-        cv::MORPH_OPEN,
-        kernel
-    );
-
-    // ---------- Stage 4: 从像素区域提取轮廓 ----------
-    //
-    // 一条 contour 本质上是一组 Point；
-    // contours 是“很多条轮廓”的集合。
-    std::vector<std::vector<cv::Point>> contours;
-
-    cv::findContours(
-        cleaned,
-        contours,
-        cv::RETR_EXTERNAL,      // 只取最外层轮廓
-        cv::CHAIN_APPROX_SIMPLE // 压缩共线边界点
-    );
-
-    // 后面的线框、文字只画到 debug，
-    // 不修改原始 image，便于对照。
-    cv::Mat debug = image.clone();
-
-    // ---------- Stage 5: 逐个分析轮廓 ----------
-    for (const auto& contour : contours) {
-        // contourArea() 返回轮廓内部面积，单位约为 pixel^2。
-        const double area =
-            cv::contourArea(contour);
-
-        // 很小的连通区域更可能是噪声。
-        // 30.0 只是示例阈值，真实项目应来自数据统计。
-        if (area < 30.0) {
-            continue;
-        }
-
-        // 用最小面积旋转矩形包住当前轮廓。
-        // 相比 boundingRect()，它允许矩形旋转，
-        // 因而更适合描述倾斜的细长目标。
-        const cv::RotatedRect rect =
-            cv::minAreaRect(contour);
-
-        // RotatedRect::points() 把旋转矩形转换成 4 个角点，
-        // 这样就可以用 line() 把矩形真正画到图像上。
-        cv::Point2f vertices[4];
-        rect.points(vertices);
-
-        for (int i = 0; i < 4; ++i) {
-            cv::line(
-                debug,
-                vertices[i],
-                vertices[(i + 1) % 4],
-                cv::Scalar(0, 255, 0),
-                2
-            );
-        }
-
-        // 用一个红色实心点标记旋转矩形中心。
-        cv::circle(
-            debug,
-            rect.center,
-            3,
-            cv::Scalar(0, 0, 255),
-            cv::FILLED
-        );
-
-        // 把每个候选的几何参数打印出来。
-        // 新人建议实际旋转目标，观察 size / angle 怎样变化。
-        std::cout
-            << "area=" << area
-            << ", center=("
-            << rect.center.x << ", "
-            << rect.center.y << ")"
-            << ", size=("
-            << rect.size.width << ", "
-            << rect.size.height << ")"
-            << ", angle="
-            << rect.angle
-            << '\n';
-    }
-
-    // 同时查看 Pipeline 的关键中间结果：
-    // 原图 -> 原始 Mask -> 形态学结果 -> 最终几何结果。
-    cv::imshow("image", image);
-    cv::imshow("mask", mask);
-    cv::imshow("cleaned", cleaned);
-    cv::imshow("result", debug);
-
-    cv::waitKey(0);
-    return 0;
-}
-```
-
-读这类代码时，不要从第一行开始机械地记 API，先看整条 Pipeline：颜色空间转换、分割、去噪、轮廓、几何拟合、可视化。知道每一层解决什么问题之后，函数名才真正有意义。
-
----
-
-## 11. 绘图函数与 Debug 可视化
-
-视觉开发中，把中间结果画出来是最重要的调试手段之一。常用的绘制函数有：
-
-```cpp
-cv::line(...)
-cv::rectangle(...)
-cv::circle(...)
-cv::ellipse(...)
-cv::polylines(...)
-cv::drawContours(...)
-cv::putText(...)
-```
-
-它们的用途不是把结果画得好看，而是验证算法究竟看到了什么。例如：
-
-- 所有轮廓画成灰色；
-- 通过面积筛选的候选画成黄色；
-- 通过完整灯条筛选的候选画成绿色；
-- 最终装甲板画四角点和中心；
-- 被拒绝候选旁边写出 `ratio`、`angle` 等数值。
-
-这样一来，最终结果出错时，你能很快判断问题出在 Pipeline 的哪一级。
-
----
-
-## 12. Trackbar：把反复改代码变成实时调参数
-
-对于阈值、HSV 区间、形态学 kernel 这类参数，OpenCV 的 Trackbar 很适合教学和初步的数据观察。
-
-完整示例：
-
-```cpp
-#include <opencv2/opencv.hpp>
-
-#include <iostream>
-
-int main(int argc, char** argv)
-{
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <image_path>\n";
         return 1;
     }
 
-    cv::Mat image = cv::imread(argv[1]);
+    cv::Mat image = cv::imread(argv[1], cv::IMREAD_COLOR);
+
+    // imread 失败不抛异常，返回空 Mat。读文件后先查 empty()。
     if (image.empty()) {
+        std::cerr << "Failed to read image\n";
         return 1;
     }
 
-    cv::Mat hsv;
-    cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
+    std::cout << "size = " << image.cols << " x " << image.rows << '\n';
+    std::cout << "channels = " << image.channels() << '\n';
 
-    int h_min = 90;
-    int h_max = 130;
-    int s_min = 80;
-    int v_min = 80;
+    const int x = image.cols / 2;
+    const int y = image.rows / 2;
 
-    cv::namedWindow("control");
+    // 下标的顺序是 (y, x)，通道顺序是 BGR。
+    const cv::Vec3b pixel = image.at<cv::Vec3b>(y, x);
+    std::cout << "center BGR = "
+              << static_cast<int>(pixel[0]) << ", "
+              << static_cast<int>(pixel[1]) << ", "
+              << static_cast<int>(pixel[2]) << '\n';
 
-    // createTrackbar() 把一个整数变量绑定到 GUI 滑块。
-    // 当你拖动滑块时，对应变量会自动更新。
-    // 标准 8-bit HSV 中 H 最大常用 179，因此这里上限设为 179；
-    // S / V 为 8 bit，所以上限为 255。
-    cv::createTrackbar("H min", "control", &h_min, 179);
-    cv::createTrackbar("H max", "control", &h_max, 179);
-    cv::createTrackbar("S min", "control", &s_min, 255);
-    cv::createTrackbar("V min", "control", &v_min, 255);
+    // 取中央一半的区域当 ROI。
+    const cv::Rect roi_rect(
+        (image.cols - image.cols / 2) / 2,
+        (image.rows - image.rows / 2) / 2,
+        image.cols / 2,
+        image.rows / 2
+    );
 
-    while (true) {
-        cv::Mat mask;
+    // 画框要改动像素，clone 一份，别污染原图。
+    cv::Mat debug = image.clone();
+    cv::rectangle(debug, roi_rect, cv::Scalar(0, 255, 0), 2);
+    cv::circle(debug, cv::Point(x, y), 6, cv::Scalar(0, 0, 255), cv::FILLED);
+    cv::putText(
+        debug,
+        "opencv",
+        cv::Point(20, 40),
+        cv::FONT_HERSHEY_SIMPLEX,
+        1.0,
+        cv::Scalar(0, 255, 0),
+        2
+    );
 
-        // 每一轮循环都读取当前滑块值，重新生成 Mask。
-        // 这样拖动 H/S/V 参数时，窗口里的结果会立即变化。
-        cv::inRange(
-            hsv,
-            cv::Scalar(h_min, s_min, v_min),
-            cv::Scalar(h_max, 255, 255),
-            mask
-        );
+    cv::imshow("image", image);
+    cv::imshow("debug", debug);
+    cv::imwrite("debug_output.jpg", debug);
 
-        cv::imshow("image", image);
-        cv::imshow("mask", mask);
-
-        const int key = cv::waitKey(10);
-        if (key == 27 || key == 'q') {
-            break;
-        }
-    }
-
+    // waitKey(0) 一直等，直到按任意键。
+    cv::waitKey(0);
     return 0;
 }
 ```
 
-Trackbar 是用来观察参数对图像的影响、采集统计数据的，不是让你在一张图上拖出一组“刚好能识别”的参数，然后直接写死进比赛代码。最终参数仍然要在真实数据集上验证。
+这个程序用到的 `Mat`、`Vec3b`、`Rect`、`Point`、`Scalar`、`imread`/`imwrite`、`rectangle`/`circle`/`putText`、`imshow`/`waitKey`，就是后面读项目代码要认的全部基础类型和函数。
 
----
-
-# 第四部分：RoboMaster 传统视觉建模
-
-## 13. 从“人眼判断”到“机器判据”
-
-假设画面里有一根装甲板灯条。你可能会说：“它很亮、颜色是蓝的、形状细长、方向接近竖直。”计算机读不懂这些自然语言，所以要把它们转换成数值特征。
-
-| 人的描述 | 可计算特征 | 常见 OpenCV 工具 |
-| --- | --- | --- |
-| 很亮 | Gray / HSV-V / 通道强度 | `cvtColor`、`split` |
-| 是蓝色/红色 | HSV 区间、通道差 | `inRange`、数组运算 |
-| 很细长 | 长宽比 | `minAreaRect` |
-| 面积合理 | Contour Area | `contourArea` |
-| 接近竖直 | 长轴倾角 | `RotatedRect` / 顶点计算 |
-| 两根灯条差不多高 | Height Ratio | 基础数学 |
-| 两根灯条方向相近 | Angle Difference | 基础数学 |
-| 中心高度接近 | Normalized Δy | `Point2f`、基础数学 |
-| 左右距离合理 | Normalized Center Distance | `norm`、基础数学 |
-
-传统视觉最核心的能力，是知道该构造什么特征，以及为什么这个特征对真正的目标稳定、对干扰目标不稳定。至于 `findContours` 的参数，反倒是次要的。
-
----
-
-## 14. 推荐定义自己的 `Light` 和 `Armor`
-
-OpenCV 给你的只是通用几何对象：
-
-```cpp
-cv::RotatedRect
-```
-
-但是业务层真正关心的是：
-
-```cpp
-struct Light {
-    cv::Point2f center;
-    cv::Point2f top;
-    cv::Point2f bottom;
-
-    float width;
-    float height;
-    float tilt;
-};
-
-struct Armor {
-    Light left;
-    Light right;
-
-    cv::Point2f center;
-    std::array<cv::Point2f, 4> corners;
-};
-```
-
-这样的数据结构完成了一次重要的抽象：
+## 3. 最小 CMake 工程
 
 ```text
-像素 → 轮廓 → 通用几何对象 → 有业务语义的 Light → Armor
+opencv_demo/
+├── CMakeLists.txt
+└── main.cpp
 ```
 
-后续模块应该尽量用语义稳定的接口，而不是到处重新解释 OpenCV 的 `RotatedRect::width`、`height` 和 `angle`。
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(opencv_demo LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(OpenCV REQUIRED)
+
+add_executable(opencv_demo main.cpp)
+target_include_directories(opencv_demo PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(opencv_demo PRIVATE ${OpenCV_LIBS})
+```
+
+```bash
+mkdir -p build && cd build
+cmake ..
+cmake --build . -j
+./opencv_demo ../test.jpg
+```
 
 ---
 
-## 15. 完整实战：一个简化的灯条 Detector
+# 第二部分：项目里真实用到的 OpenCV
 
-下面给出一段完整代码。它刻意写得简单，是为了让新人第一次看到前面学过的 API 如何组合成一个 Detector，并不能当作战队最终的比赛算法直接使用。
+下面每一节都对应 `autoaim_sentry_2025` 里的一段真实代码。可以边读文章边打开对应文件。
 
-代码流程：
+## 4. 相机取图：从 SDK buffer 到 cv::Mat
 
-1. 读取图像；
-2. HSV 颜色分割；
-3. 形态学去噪；
-4. `findContours`；
-5. `minAreaRect`；
-6. 将 `RotatedRect` 规范化为 `Light`；
-7. 使用面积、长宽比和倾角进行筛选；
-8. 绘制结果。
+海康相机的 SDK 给你的是裸内存指针，不是 `cv::Mat`。`camera_node.cpp` 的取图线程做的事就是把它包成 `Mat`：
 
 ```cpp
-#include <opencv2/opencv.hpp>
+// 1440*864, BGR8
+const cv::Mat capture_frame(
+    cv::Size(out_frame.stFrameInfo.nWidth, out_frame.stFrameInfo.nHeight),
+    CV_8UC3
+);
+std::copy(
+    out_frame.pBufAddr,
+    out_frame.pBufAddr + out_frame.stFrameInfo.nFrameLen + 1,
+    capture_frame.data
+);
+MV_CC_FreeImageBuffer(cam_handle_, &out_frame);
 
-#include <algorithm>
-#include <cmath>
-#include <iostream>
-#include <vector>
+// 1280*768 -> 640*384
+cv::Mat resized_img;
+cv::resize(capture_frame, resized_img, cv::Size(640, 384), 0, 0, cv::INTER_LINEAR);
+```
 
-struct Light {
-    cv::Point2f center;
-    cv::Point2f top;
-    cv::Point2f bottom;
+`camera_node.cpp:134-147`
 
-    float width = 0.0f;
-    float height = 0.0f;
+`cv::Mat(Size(width, height), CV_8UC3)` 只分配内存、不填数据，`std::copy` 把 SDK 的裸 buffer 拷进去。拿到 `Mat` 后立刻 `resize` 到 640×384。
+这里两处注释写的原图尺寸不一致（`1440*864` 和 `1280*768`，赤道大变了bushi），实际尺寸以 `nWidth`/`nHeight` 为准。
+固定缩到 640×384 是为了适配神经网络模型输入，神经网络模型的允许输入图像尺寸是固定的，不管你相机取流了多大尺寸的图片，都要resize，尺寸处理放在相机节点，检测节点就不必再做缩放。。
 
-    // 相对竖直方向的倾斜角。
-    // 0 表示竖直，正负表示向不同方向倾斜。
-    float tilt = 0.0f;
+`openvino_infer_engine.cpp:46` 用于检查尺寸，不匹配就抛异常：
+
+```cpp
+if (input_image_height_ != input_image.rows || input_image_width_ != input_image.cols) {
+    throw std::runtime_error("invalid input image size");
+}
+```
+
+接下来把 `Mat` 拷进 ROS 图像消息。这里注意理解 `step` 和通道的关系：`step`（stride）是图像一行的字节数。3 通道 `uchar` 图，一行就是 `width * 3`。ROS 图像消息本质上就是这些字节加一段描述。
+
+```cpp
+image_msg.height = resized_img.rows;
+image_msg.width = resized_img.cols;
+image_msg.step = image_msg.width * 3;   // 一行 3 通道，共 width*3 字节
+image_msg.data.resize(image_msg.width * image_msg.height * 3);
+std::copy(
+    resized_img.data,
+    resized_img.data + image_msg.data.size() + 1,
+    image_msg.data.data()
+);
+```
+
+`camera_node.cpp:156-164`
+
+## 5. ROS 图像 ↔ cv::Mat：cv_bridge
+
+检测节点订阅的是 `sensor_msgs/msg/Image`，是ros的图像话题类型，前面讲的`Mat`是openCV的图像类型，二者不一样，所以中间要用 `cv_bridge` 转换：
+
+```cpp
+const auto cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
+const cv::Mat img = cv_ptr->image;
+```
+
+`detector_node.cpp:127`
+
+`"bgr8"` 是目标编码：8 bit、3 通道、BGR。检查一下当前 `Mat` 的 `type()` 是不是 `CV_8UC3`，就和上一节对上了。
+
+`cv_bridge` 的两个常用函数：
+
+- `toCvCopy(msg, encoding)`：拷一份，拿到独立的 `Mat`。检测节点要拿它去推理、画图（例如画出识别框供调试时人眼观察），所以要用拷贝。
+- `toCvShare(msg, encoding)`：不拷贝，共享底层数据，更快，但是消息生命周期结束就失效。
+
+录像节点里的用法：
+
+```cpp
+const auto cv_ptr = cv_bridge::toCvShare(msg, "bgr8");
+if (cv_ptr->image.empty()) {
+    return;
+}
+cv::Mat image = cv_ptr->image.clone();
+```
+
+`recorder_node.cpp:144-149`
+
+先 `empty()` 检查，再 `clone()` 拿独立数据。
+
+## 6. 解析网络输出：Rect 与 Point2f
+
+神经网络检测模型推理完输出的是一段 float 数组。`openvino_infer_engine.cpp` 把它按行解析。每行的结构是：
+
+```text
+[x, y, w, h, 颜色×编号的得分..., 关键点1_x, 关键点1_y, 关键点2_x, 关键点2_y, ...]
+```
+
+解析代码：
+
+```cpp
+std::vector<cv::Rect> bboxes;
+std::vector<float> confidences;
+std::vector<Detection> detections_before_nms;
+
+for (int i = 0; i < out_rows; i++) {
+    const std::span<float> row(output_tensor.data<float>() + i * out_cols, out_cols);
+
+    // 在 (颜色 × 编号) 得分区里取最大值当置信度
+    const auto max_conf = std::max_element(row.begin() + 4, row.begin() + 4 + num_colors_ * num_labels_);
+    const cv::Rect bbox(row[0], row[1], row[2], row[3]);
+    const float confidence = *max_conf;
+
+    if (confidence < conf_threshold_) continue;
+
+    const int color = (max_conf - row.begin() - 4) / num_labels_;
+    const int label = (max_conf - row.begin() - 4) % num_labels_;
+
+    // 关键点成对存成 cv::Point2f
+    std::vector<cv::Point2f> keypoints;
+    for (int j = 0; j < num_keypoints_; j++) {
+        keypoints.emplace_back(
+            row[4 + num_colors_ * num_labels_ + j * 2],
+            row[4 + num_colors_ * num_labels_ + j * 2 + 1]
+        );
+    }
+
+    bboxes.emplace_back(bbox);
+    confidences.emplace_back(confidence);
+    detections_before_nms.emplace_back(color, label, confidence, keypoints);
+}
+```
+
+`openvino_infer_engine.cpp:63-81`
+
+这里 `cv::Rect` 存检测框，`cv::Point2f` 存关键点。回想第 1.4 节：`Rect` 的四个参数是 `(x, y, w, h)`，`Point2f` 有两个 float 分量 `x`、`y`。模型的输出布局只是约定好的数字顺序，把它翻译成 OpenCV 的两个类型，后面就能用 OpenCV 的几何工具处理。
+
+检测结果的数据结构定义在 `openvino_infer_engine.hpp:7`：
+
+```cpp
+struct Detection {
+    int color, label; //颜色 标签
+    float confidence; //置信度
+    std::vector<cv::Point2f> keypoints; //关键点坐标
 };
+```
 
-float normalizeTiltFromVertical(const cv::Point2f& direction)
+装甲板检测器初始化时传的是 `3, 8, 4`，即 3 种颜色、8 个编号、4 个关键点：
+
+```cpp
+armor_infer_engine_ = std::make_unique<OpenVINOInferEngine>(
+    armor_model_path_, device_name_,
+    3, 8, 4,
+    confidence_threshold_, nms_threshold_
+);
+```
+
+`detector_node.cpp:74-80`
+
+置信度低于 `conf_threshold_` 的框在这一步会被丢弃，即用"置信度阈值"确定框是否可以给后续使用。
+
+## 7. NMS：cv::dnn::NMSBoxes
+
+网络会在同一块装甲板上输出多个重叠框，需要去重。项目直接调用 OpenCV 的 NMS：
+
+```cpp
+std::vector<int> indices;
+cv::dnn::NMSBoxes(bboxes, confidences, conf_threshold_, nms_threshold_, indices);
+```
+
+`openvino_infer_engine.cpp:82-83`
+
+NMS（非极大值抑制）的做法是：按置信度从高到低，保留最高分的框，把与它重叠过多的框丢掉，重复。判断"重叠过多"用的是交并比 IoU：
+
+```text
+IoU = 两个框的交集面积 / 两个框的并集面积
+```
+
+IoU 超过 `nms_threshold_`（项目里默认 0.4）的框被抑制。用 `Rect` 自己算一遍，能彻底看清这个阈值在干什么：
+
+```cpp
+float iou(const cv::Rect& a, const cv::Rect& b)
 {
-    // direction 是灯条长轴的一个二维方向向量。
-    //
-    // 常见 atan2(y, x) 是“相对 x 轴”的角度。
-    // 这里写成 atan2(direction.x, direction.y)，
-    // 相当于把 y 轴（图像中的竖直方向）作为 0° 参考，
-    // 对灯条来说更直观：越接近竖直，tilt 越接近 0。
-    //
-    // 注意：图像坐标 y 向下，因此角度正负方向与普通数学坐标
-    // 可能不完全符合你的直觉。正式工程必须统一自己的角度定义。
-    float angle = static_cast<float>(
-        std::atan2(direction.x, direction.y) * 180.0 / CV_PI
-    );
+    const int ix1 = std::max(a.x, b.x);
+    const int iy1 = std::max(a.y, b.y);
+    const int ix2 = std::min(a.x + a.width, b.x + b.width);
+    const int iy2 = std::min(a.y + a.height, b.y + b.height);
 
-    // 长轴方向正反等价，因此按 180° 周期折叠到 [-90, 90]。
-    while (angle > 90.0f) {
-        angle -= 180.0f;
-    }
-    while (angle <= -90.0f) {
-        angle += 180.0f;
-    }
+    const int iw = std::max(0, ix2 - ix1);
+    const int ih = std::max(0, iy2 - iy1);
+    const float inter = static_cast<float>(iw * ih);
 
-    return angle;
+    const float uni = static_cast<float>(a.area() + b.area()) - inter;
+    return uni > 0.f ? inter / uni : 0.f;
 }
+```
 
-Light makeLight(const cv::RotatedRect& rect)
-{
-    cv::Point2f pts[4];
-    rect.points(pts);
+`a.area()` 就是 `width * height`。阈值调低，重叠的框更容易被合并（相邻两块装甲板可能被合成一个）；调高，保留更多重叠框（误检增多）。
 
-    // RotatedRect 的 4 个顶点按矩形边界给出。
-    // 计算两条相邻边长度，就能判断哪一条是长边、哪一条是短边。
-    // cv::norm(Point2f) 对二维向量返回欧氏长度。
-    const float edge01 =
-        static_cast<float>(
-            cv::norm(pts[1] - pts[0])
-        );
-    const float edge12 =
-        static_cast<float>(
-            cv::norm(pts[2] - pts[1])
-        );
+NMS 之后还做了一次关键点越界检查：
 
-    cv::Point2f long_axis_direction;
-
-    Light light;
-    light.center = rect.center;
-
-    if (edge01 >= edge12) {
-        light.height = edge01;
-        light.width = edge12;
-        long_axis_direction = pts[1] - pts[0];
-    } else {
-        light.height = edge12;
-        light.width = edge01;
-        long_axis_direction = pts[2] - pts[1];
-    }
-
-    const float axis_length = std::max(
-        1e-6f,
-        static_cast<float>(cv::norm(long_axis_direction))
-    );
-
-    const cv::Point2f unit_axis = long_axis_direction / axis_length;
-
-    cv::Point2f end_a =
-        light.center + unit_axis * (light.height * 0.5f);
-    cv::Point2f end_b =
-        light.center - unit_axis * (light.height * 0.5f);
-
-    // 图像中 y 更小的是“上”。
-    if (end_a.y < end_b.y) {
-        light.top = end_a;
-        light.bottom = end_b;
-    } else {
-        light.top = end_b;
-        light.bottom = end_a;
-    }
-
-    light.tilt = normalizeTiltFromVertical(unit_axis);
-    return light;
+```cpp
+for (int i = 0; i < num_keypoints_; i++) {
+    if (det.keypoints[i].x > input_image_width_ || det.keypoints[i].x < 0) { is_valid = false; break; }
+    if (det.keypoints[i].y > input_image_height_ || det.keypoints[i].y < 0) { is_valid = false; break; }
 }
+```
 
-std::vector<Light> detectLights(const cv::Mat& image)
-{
-    cv::Mat hsv;
-    cv::cvtColor(image, hsv, cv::COLOR_BGR2HSV);
+`openvino_infer_engine.cpp:88-97`
 
-    // 仅作为教程示例。
-    // 真实参数必须来自战队自己的相机、曝光和数据集。
-    const cv::Scalar lower_blue(90, 80, 100);
-    const cv::Scalar upper_blue(130, 255, 255);
+关键点跑到图像外面就说明这个检测不可靠，直接丢。这里用到的 `x`/`y` 和图像宽高，又回到了第 1 节的坐标系。
 
-    cv::Mat mask;
-    cv::inRange(hsv, lower_blue, upper_blue, mask);
+## 8. 画调试图：line / drawMarker / putText
 
-    const cv::Mat kernel = cv::getStructuringElement(
-        cv::MORPH_RECT,
-        cv::Size(3, 3)
-    );
+检测结果要能看见才能调。`detector_node.cpp` 的 `draw_labeled_image()` 把框和关键点画到图上：
 
-    cv::morphologyEx(
-        mask,
-        mask,
-        cv::MORPH_OPEN,
-        kernel
-    );
+```cpp
+cv::Mat DetectorNode::draw_labeled_image(
+    const cv::Mat& input_image,
+    const std::variant<std::vector<ArmorDetection>, std::vector<BuffDetection>>& detections
+) const {
+    cv::Mat img = input_image.clone();   // 要改动，先复制
 
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(
-        mask,
-        contours,
-        cv::RETR_EXTERNAL,
-        cv::CHAIN_APPROX_SIMPLE
-    );
+    const std::vector<cv::Scalar> colors =
+        {cv::Scalar(255, 0, 0), cv::Scalar(0, 0, 255), cv::Scalar(114, 114, 114)};
 
-    std::vector<Light> lights;
+    for (const auto& det: armor_detections) {
+        cv::Point2f kpts[4] {
+            cv::Point2f(det.tl.x, det.tl.y),
+            cv::Point2f(det.bl.x, det.bl.y),
+            cv::Point2f(det.br.x, det.br.y),
+            cv::Point2f(det.tr.x, det.tr.y)
+        };
 
-    for (const auto& contour : contours) {
-        const double area = cv::contourArea(contour);
+        // 画四边和两条对角线
+        cv::line(img, kpts[0], kpts[1], colors[det.color], 2);
+        cv::line(img, kpts[1], kpts[2], colors[det.color], 2);
+        cv::line(img, kpts[2], kpts[3], colors[det.color], 2);
+        cv::line(img, kpts[3], kpts[0], colors[det.color], 2);
+        cv::line(img, kpts[0], kpts[2], colors[det.color], 1);
+        cv::line(img, kpts[1], kpts[3], colors[det.color], 1);
 
-        if (area < 20.0) {
-            continue;
-        }
-
-        const cv::RotatedRect rect = cv::minAreaRect(contour);
-        Light light = makeLight(rect);
-
-        if (light.width < 1e-3f) {
-            continue;
-        }
-
-        const float aspect_ratio =
-            light.height / light.width;
-
-        // 下面开始从“通用旋转矩形”筛成“有语义的 Light”。
-        // aspect_ratio 描述候选是否足够细长；
-        // tilt 描述候选是否接近我们预期的灯条方向。
-        //
-        // 以下阈值全部只是教学示例，不能直接作为比赛参数。
-        const bool ratio_ok =
-            aspect_ratio > 2.0f &&
-            aspect_ratio < 15.0f;
-
-        const bool tilt_ok =
-            std::abs(light.tilt) < 40.0f;
-
-        if (!ratio_ok || !tilt_ok) {
-            continue;
-        }
-
-        lights.push_back(light);
-    }
-
-    return lights;
-}
-
-void drawLights(
-    cv::Mat& image,
-    const std::vector<Light>& lights
-)
-{
-    for (const Light& light : lights) {
-        cv::line(
-            image,
-            light.top,
-            light.bottom,
-            cv::Scalar(0, 255, 0),
-            2
-        );
-
-        cv::circle(
-            image,
-            light.center,
-            3,
-            cv::Scalar(0, 0, 255),
-            cv::FILLED
-        );
-
-        const std::string text =
-            "r=" +
-            std::to_string(light.height / light.width).substr(0, 4) +
-            " tilt=" +
-            std::to_string(light.tilt).substr(0, 5);
+        // 每个关键点画一个不同的菱形标记
+        cv::drawMarker(img, kpts[0], cv::Scalar(255, 255, 0), cv::MARKER_DIAMOND, 4, 2);
+        cv::drawMarker(img, kpts[1], cv::Scalar(255, 0, 255), cv::MARKER_DIAMOND, 4, 2);
+        cv::drawMarker(img, kpts[2], cv::Scalar(0, 255, 255), cv::MARKER_DIAMOND, 4, 2);
+        cv::drawMarker(img, kpts[3], cv::Scalar(0, 255, 0), cv::MARKER_DIAMOND, 4, 2);
 
         cv::putText(
-            image,
-            text,
-            light.center + cv::Point2f(5.0f, -5.0f),
-            cv::FONT_HERSHEY_SIMPLEX,
-            0.4,
-            cv::Scalar(0, 255, 255),
+            img,
+            armor_label[det.label] + " " + std::to_string(det.confidence).substr(0, 4),
+            cv::Point(kpts[0].x - 5, kpts[0].y - 15),
+            cv::FONT_HERSHEY_TRIPLEX,
+            0.7,
+            cv::Scalar(255, 255, 255),
             1
         );
     }
-}
-
-int main(int argc, char** argv)
-{
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <image_path>\n";
-        return 1;
-    }
-
-    cv::Mat image = cv::imread(argv[1]);
-    if (image.empty()) {
-        std::cerr << "Failed to read image.\n";
-        return 1;
-    }
-
-    const std::vector<Light> lights =
-        detectLights(image);
-
-    cv::Mat debug = image.clone();
-    drawLights(debug, lights);
-
-    std::cout
-        << "Detected lights: "
-        << lights.size()
-        << '\n';
-
-    cv::imshow("result", debug);
-    cv::waitKey(0);
-
-    return 0;
+    return img;
 }
 ```
 
-这段代码最值得注意的是它的结构，而不是具体阈值：
+`detector_node.cpp:163-201`（此处按装甲板分支精简，能量机关分支结构相同）
+
+几个点：
+
+- `clone()`：`input_image` 是相机来的原图，不能直接改，所以先复制。
+- `colors[det.color]`：颜色索引 0/1/2 对应蓝、红、灰，和模型输出的颜色类别一致。
+- `cv::drawMarker` 的 `MARKER_DIAMOND`：每个关键点用不同颜色的菱形标记，方便肉眼分辨 `tl`/`bl`/`br`/`tr` 有没有对应错。
+- `putText` 的位置用 `kpts[0]` 往上偏移 15 像素，文字不会压住框。
+
+最后这个 `Mat` 转回 ROS 消息发出去：
 
 ```cpp
-image
-    -> detectLights()
-        -> cvtColor
-        -> inRange
-        -> morphologyEx
-        -> findContours
-        -> contourArea
-        -> minAreaRect
-        -> makeLight
-        -> feature filter
-    -> std::vector<Light>
+sensor_msgs::msg::Image::SharedPtr labeled_image = cv_bridge::CvImage(
+    msg->header,
+    "bgr8",
+    draw_labeled_image(img, detections.armor_detections)
+).toImageMsg();
+labeled_image_pub_->publish(*labeled_image);
 ```
 
-Detector 变复杂之后，也应该尽量保持这样清晰的数据流。
+`detector_node.cpp:139-146`
 
----
+是否发布由参数 `enable_labeled_image` 控制，默认打开就是 `config/params.yaml` 里那个开关。
 
-## 16. 从两个 `Light` 匹配成 `Armor`
+## 9. PnP：solvePnPGeneric
 
-得到灯条只是第一步。要判断两个灯条是否属于同一块装甲板，可以构造一组相对几何特征。
-
-```cpp
-float mean_height =
-    0.5f * (left.height + right.height);
-
-float height_ratio =
-    std::max(left.height, right.height) /
-    std::max(1e-6f, std::min(left.height, right.height));
-
-float normalized_y_diff =
-    std::abs(left.center.y - right.center.y) /
-    mean_height;
-
-float normalized_x_diff =
-    std::abs(left.center.x - right.center.x) /
-    mean_height;
-
-float tilt_diff =
-    std::abs(left.tilt - right.tilt);
-```
-
-这里特意使用 `ratio` 和“除以平均灯条高度”的归一化距离，而不是直接写 `abs(y1 - y2) < 20`、`distance < 100`。因为目标距离一变，所有像素尺度都会跟着变，相对量通常比固定像素量更稳定。
-
-一个简化的匹配函数可以写成：
+检测只给二维像素。要拿去控制云台，得解出三维位姿，用的是 `cv::solvePnPGeneric`：
 
 ```cpp
-bool isArmorPair(const Light& a, const Light& b)
-{
-    const Light& left  = (a.center.x < b.center.x) ? a : b;
-    const Light& right = (a.center.x < b.center.x) ? b : a;
-
-    const float mean_height =
-        0.5f * (left.height + right.height);
-
-    if (mean_height < 1e-3f) {
-        return false;
-    }
-
-    const float height_ratio =
-        std::max(left.height, right.height) /
-        std::max(1e-3f, std::min(left.height, right.height));
-
-    const float y_diff =
-        std::abs(left.center.y - right.center.y) /
-        mean_height;
-
-    const float x_diff =
-        std::abs(left.center.x - right.center.x) /
-        mean_height;
-
-    const float tilt_diff =
-        std::abs(left.tilt - right.tilt);
-
-    // 仅用于说明判据结构，不是比赛标准参数。
-    return
-        height_ratio < 1.5f &&
-        y_diff < 0.6f &&
-        x_diff > 0.5f &&
-        x_diff < 6.0f &&
-        tilt_diff < 20.0f;
-}
-```
-
-真正的比赛代码还要处理敌我颜色、大小装甲板、透视变化、异常配对、目标编号识别等更多问题。这里只想让你理解一点：检测的过程，其实就是不断把候选集合缩小的过程。
-
----
-
-## 17. 四角点的重要性
-
-两个灯条匹配成装甲板后，Detector 最重要的输出之一，是顺序稳定的四个二维角点。你可以先从灯条端点构造一个初始版本，例如：
-
-```cpp
-Armor armor;
-
-armor.left = left;
-armor.right = right;
-armor.center =
-    0.5f * (left.center + right.center);
-
-// 示例顺序：左上、右上、右下、左下。
-armor.corners = {
-    left.top,
-    right.top,
-    right.bottom,
-    left.bottom
+const std::array<cv::Point2f, 4> img_pts {
+    cv::Point2f {detection.tl.x, detection.tl.y},
+    cv::Point2f {detection.bl.x, detection.bl.y},
+    cv::Point2f {detection.br.x, detection.br.y},
+    cv::Point2f {detection.tr.x, detection.tr.y}
 };
-```
 
-真正的项目里，要结合灯条结构、透视和装甲板定义来确定更准确的角点方案。不管用什么方法，有一条工程要求必须从 Detector 开始就固定下来：四个角点的顺序在全队要统一。
+std::array<cv::Mat, 2> rvec, tvec;
+std::array<float, 2> reprojerr;
 
-后续的 PnP 会把二维角点和装甲板物理模型上的三维点一一对应。如果一个模块用“左上、右上、右下、左下”，另一个模块却理解成不同顺序，程序可能照常运行，却得到完全错误的三维姿态。
-
----
-
-# 第五部分：工程化使用 OpenCV
-
-## 18. 参数不是 Magic Number
-
-传统视觉代码中一定会出现很多参数：
-
-```cpp
-if (area > 20.0 &&
-    ratio > 2.0f &&
-    ratio < 15.0f &&
-    std::abs(tilt) < 40.0f) {
-    ...
-}
-```
-
-该问的不是“这个值调到多少能识别”，而是“这个参数代表什么物理或几何意义，它在真实样本上的分布是什么”。
-
-推荐流程：
-
-1. 采集覆盖不同距离、曝光、姿态和运动状态的数据；
-2. 对真目标和典型干扰分别记录 `area`、`ratio`、`tilt` 等特征；
-3. 查看分布和重叠区域；
-4. 根据漏检/误检代价确定初始阈值；
-5. 留出合理 margin；
-6. 在独立数据上再次验证。
-
-举例来说，如果真正的灯条长宽比在当前数据中大多落在 `3.1~6.4`，可以从一个更宽松的区间开始验证，而不是因为某一张图片上 `ratio=4.8` 就把阈值写成 `4.5~5.0`。
-
----
-
-## 19. Failure Case 比成功截图更重要
-
-一个视觉算法在几张测试图上框出了装甲板，其实说明不了太多。更应该系统地保存和分析这些情况：
-
-- False Negative：真实目标被漏掉；
-- False Positive：背景被误识别；
-- 过曝、欠曝；
-- 运动模糊；
-- 远距离小目标；
-- 强反光；
-- 部分遮挡；
-- 多目标交叉；
-- 特殊姿态；
-- 场地灯光干扰。
-
-建议训练时就维护数据目录：
-
-```text
-dataset/
-├── normal/
-├── overexposure/
-├── underexposure/
-├── motion_blur/
-├── reflection/
-├── far/
-├── occlusion/
-├── false_positive/
-└── false_negative/
-```
-
-算法改动后重新跑一遍这些 Failure Case，才能看出在修复一个问题的同时，有没有引入新的回归。
-
----
-
-## 20. 调试一个视觉 Pipeline
-
-遇到“装甲板没识别出来”，最糟糕的做法是同时乱改 HSV、面积、长宽比和角度阈值。应该沿数据流逐级定位：
-
-```text
-Original
-  → Gray / HSV / Channel Difference
-  → Binary Mask
-  → Morphology Result
-  → Contours
-  → RotatedRect Candidates
-  → Lights
-  → Armor Pairs
-  → Final Armors
-```
-
-每一级都应该能够可视化或打印关键数值。例如：
-
-```cpp
-cv::imshow("mask", mask);
-cv::imshow("morph", morph);
-
-std::cout
-    << "candidate area=" << area
-    << " ratio=" << ratio
-    << " tilt=" << tilt
-    << '\n';
-```
-
-如果 Mask 里目标已经消失，问题一定出在颜色或亮度分割之前；如果 Light 全部正确，Armor 却为零，就不该继续调 HSV，而要去检查匹配判据。
-
-视觉 Debug 的基本原则就是：不要猜，去检查中间结果。
-
----
-
-## 21. 模块化组织
-
-新人练习时可以把所有东西都写在一个 `main.cpp` 里，但真正开始迭代后，应该按职责拆开：
-
-```cpp
-cv::Mat preprocess(const cv::Mat& image);
-
-std::vector<Light> detectLights(const cv::Mat& image);
-
-std::vector<Armor> matchArmors(
-    const std::vector<Light>& lights
-);
-
-void drawDebug(
-    cv::Mat& image,
-    const std::vector<Light>& lights,
-    const std::vector<Armor>& armors
+cv::solvePnPGeneric(
+    obj_pts,          // 装甲板上的 4 个三维点（物体系）
+    img_pts,          // 图像上的 4 个二维点（像素系），顺序一一对应
+    cam_intrinsic_,   // 相机内参
+    cam_distortion_,  // 畸变系数
+    rvec,
+    tvec,
+    false,
+    cv::SOLVEPNP_IPPE,
+    cv::noArray(),
+    cv::noArray(),
+    reprojerr
 );
 ```
 
-更进一步可以组织为类：
+`pnp_solver.cpp:131-151`
+
+两个输入最关键：
+
+- `obj_pts` 是装甲板在自身坐标系里的四个角点，单位米，定义在 `pnp_solver.hpp:80-91`：
+
+  ```cpp
+  // 装甲板坐标系：前x，左y，上z
+  const std::vector<cv::Point3f> SMALL_POINTS {
+      {0, SMALL_WIDTH / 2,  HEIGHT / 2},
+      {0, SMALL_WIDTH / 2, -HEIGHT / 2},
+      {0, -SMALL_WIDTH / 2, -HEIGHT / 2},
+      {0, -SMALL_WIDTH / 2,  HEIGHT / 2}
+  };
+  ```
+- `img_pts` 就是第 6 节网络输出的那四个关键点。
+
+**二维点和三维点的顺序必须严格对应**：`obj_pts[0]` 对应 `img_pts[0]`，依此类推。如果检测器按"左上、左下、右下、右上"输出，而物体系却按别的顺序排，程序照样跑，位姿却是错的。顺序约定必须全队统一。
+
+`SOLVEPNP_IPPE` 针对平面目标，会给出两组解，所以 `rvec`/`tvec`/`reprojerr` 都是长度为 2 的数组：两组位姿加各自的重投影误差，调用方据此挑一组。
+
+解出来的是 OpenCV 相机坐标系（右 x、下 y、前 z）下的位姿，项目用 `cv2eigen` 转成 Eigen 再换算到 TF 坐标系：
 
 ```cpp
-class ArmorDetector {
-public:
-    std::vector<Armor> detect(const cv::Mat& image);
-
-private:
-    cv::Mat preprocess(const cv::Mat& image);
-    std::vector<Light> detectLights(const cv::Mat& binary);
-    std::vector<Armor> matchArmors(
-        const std::vector<Light>& lights
-    );
-};
+cv::cv2eigen(tvecs[i][j], tvec);
+cv::cv2eigen(rvecs[i][j], rvec);
+rotations[i][j] = cv_to_tf * Eigen::AngleAxisf(rvec.norm(), rvec.normalized());
+translations[i][j] = cv_to_tf * tvec;
 ```
 
-模块化的重点不是让代码显得高级，而是让每一层的输入、输出和职责都清清楚楚。一个函数如果既要相机取图，又要二值化、又要匹配、又要发送 ROS Message，后面几乎注定难以调试和测试。
+`pnp_solver.cpp:173-176`
+
+PnP 的原理、坐标系转换和标定细节在 [12-相机标定与位姿解算](/Vision_Website/induction-training/12-相机标定与位姿解算) 里讲，这里只需要知道：**OpenCV 负责从二维点解出位姿，输入是 `Point2f`/`Point3f` 两组点加内参。**
+
+## 10. 录像：cv::VideoWriter
+
+录像节点把原始图像和带标注的图各录一路视频。构造 `VideoWriter`：
+
+```cpp
+video_writer_raw_.open(
+    video_save_directory_ + timestr.str() + " raw.mkv",
+    cv::VideoWriter::fourcc('a', 'v', 'c', '1'),
+    video_fps_,
+    cv::Size(640, 384)
+);
+video_writer_raw_.set(cv::VIDEOWRITER_PROP_QUALITY, 100);
+if (!video_writer_raw_.isOpened()) {
+    RCLCPP_ERROR(get_logger(), "Failed to open video writer!");
+}
+```
+
+`recorder_node.cpp:58-67`
+
+四个参数：输出路径、编码 `fourcc('a','v','c','1')`（H.264）、帧率、帧尺寸（`Size(width, height)`）。**尺寸必须和写进去的帧一致**，这里 640×384 和相机输出一致。`isOpened()` 要检查，编码器不支持时会失败。
+
+带标注的那一路，先把状态信息画上去再写：
+
+```cpp
+const auto cv_ptr = cv_bridge::toCvShare(msg, "bgr8");
+cv::Mat image = cv_ptr->image.clone();
+
+draw_info_on_img(predictor_status_msg, image);
+draw_info_on_img(shoot_pos_msg, image);
+
+video_writer_verbose_mtx_.lock();
+video_writer_verbose_ << image;
+video_writer_verbose_mtx_.unlock();
+```
+
+`recorder_node.cpp:158-198`
+
+`<<` 就是"写一帧"。`draw_info_on_img()` 内部同样是一堆 `putText`（`recorder_node.cpp:201` 起），和第 8 节画检测框是同一类操作，只是画的是状态文字。
+
+录像节点同时被多个订阅回调调用，写视频前上锁，这是并发下 `VideoWriter` 的安全做法。
 
 ---
 
-## 22. 实时性与性能
+# 第三部分：工程习惯
 
-RoboMaster 视觉最终跑在实时系统里，所以在保证正确性之后，还要关心延迟。最简单的测量方式是：
+## 11. 用中间结果调试
+
+识别出问题，最差的做法是同时改置信度、NMS 阈值和代码。正确做法是先看中间结果。
+
+项目给检测器留了 `enable_labeled_image` 开关：
+
+```yaml
+# autoaim_detector/config/params.yaml
+enable_labeled_image: true
+```
+
+打开后 `autoaim/detector/labeled_image` 会发布画好框和关键点的图，用 Foxglove 订阅就能看。判断优先级：
+
+- 调试图上**一个框都没有**：问题在模型、输入尺寸或置信度阈值，跟画图无关；
+- 框的位置对但**关键点错乱**：检查关键点顺序，以及第 9 节说的二维/三维点对应；
+- 框和关键点都对但**录像里偏**：问题在时序或坐标转换，不在检测。
+
+先定位到哪一级，再改对应的地方。
+
+## 12. 性能
+
+实时代码要关心单帧耗时。测最简单的一段：
 
 ```cpp
 const int64 t0 = cv::getTickCount();
 
-// detector.detect(frame);
+// ... 要测的代码 ...
 
 const int64 t1 = cv::getTickCount();
-
-const double ms =
-    (t1 - t0) * 1000.0 / cv::getTickFrequency();
-
+const double ms = (t1 - t0) * 1000.0 / cv::getTickFrequency();
 std::cout << "latency = " << ms << " ms\n";
 ```
 
-或者使用 `std::chrono`。
+这份代码里，性能上的主要事实是：图像在相机节点就缩到了 640×384，检测器拿到的永远是这个小图；大块图像数据在节点间靠进程内通信传递（见 `autoaim_launcher`）；需要改动的图先 `clone()`，不需要改的用 `toCvShare()`。这三条都是在控制拷贝和尺寸的开销。
 
-常见性能问题包括：
+`cv::Mat` 的 `clone()` 是完整复制一份像素，640×384×3 大约 0.7 MB。在每帧都要跑的路径上反复 `clone()` 大图，是常见的性能浪费来源。
 
-- 对整张高分辨率图像做本可避免的处理；
-- 高频 `clone()`；
-- 重复 `cvtColor`；
-- 每帧大量动态内存分配；
-- 对所有像素进行不必要的 C++ 层循环；
-- 没有 ROI；
-- 在没有 Profile 的情况下盲目进行复杂“优化”。
+## 13. 速查
 
-推荐顺序始终是：
+这份教程和这份代码里出现过的、需要熟练的：
 
-```text
-Correct → Robust → Profile → Optimize
-```
+| API / 类型                                               | 作用                   |
+| -------------------------------------------------------- | ---------------------- |
+| `cv::Mat`                                              | 图像和矩阵             |
+| `Mat::rows / cols / channels / depth / type / empty`   | 图像属性               |
+| `Mat::at<T>(y, x)`                                     | 访问像素，注意下标顺序 |
+| `Mat::clone` / `copyTo`                              | 深拷贝                 |
+| `cv::Point / Point2f / Point3f`                        | 二维/三维点            |
+| `cv::Size`                                             | 宽、高                 |
+| `cv::Rect`                                             | 矩形，`(x, y, w, h)` |
+| `cv::Scalar`                                           | 多通道常量、颜色       |
+| `cv::Vec3b`                                            | 三通道 8 bit 像素      |
+| `cv::imread / imwrite`                                 | 图片读写               |
+| `cv::imshow / waitKey`                                 | 显示与等待             |
+| `cv::resize`                                           | 缩放                   |
+| `cv::line / drawMarker / circle / rectangle / putText` | 绘图                   |
+| `cv::solvePnPGeneric`                                  | 解位姿                 |
+| `cv::cv2eigen`                                         | 转 Eigen               |
+| `cv::dnn::NMSBoxes`                                    | 非极大值抑制           |
+| `cv::VideoWriter`                                      | 录制视频               |
+| `cv_bridge::toCvCopy / toCvShare`                      | ROS 图像与`Mat` 互转 |
 
-先让算法正确、稳定，再测出真正的瓶颈，然后针对瓶颈优化。
-
----
-
-# 第六部分：常用 OpenCV API 速查
-
-这一节不用背，作用是给新人一份“遇到问题时该往哪里找”的索引。
-
-## 23. Core / 基础对象
-
-| API / 类型 | 作用 |
-| --- | --- |
-| `cv::Mat` | 图像和矩阵 |
-| `cv::Point`, `Point2f`, `Point3f` | 二维/三维点 |
-| `cv::Size`, `Size2f` | 尺寸 |
-| `cv::Rect`, `Rect2f` | 水平矩形 / ROI |
-| `cv::Scalar` | 多通道常量和颜色 |
-| `cv::Vec3b` | 三通道 8 bit 像素 |
-| `cv::norm` | 距离/范数 |
-| `cv::absdiff` | 数组绝对差 |
-| `cv::minMaxLoc` | 查找最小/最大值 |
-| `cv::countNonZero` | 非零像素数量 |
-| `cv::split`, `cv::merge` | 通道拆分与合并 |
-| `cv::bitwise_and/or/not` | Mask 和按位运算 |
-
-## 24. 图像 / 视频输入输出
-
-| API | 作用 |
-| --- | --- |
-| `cv::imread` | 读取图片 |
-| `cv::imwrite` | 保存图片 |
-| `cv::VideoCapture` | 读取摄像头或视频 |
-| `cv::imshow` | 显示图像 |
-| `cv::waitKey` | GUI 等待和按键 |
-| `cv::namedWindow` | 创建窗口 |
-| `cv::createTrackbar` | 创建调参滑块 |
-
-## 25. 图像处理
-
-| API | 作用 |
-| --- | --- |
-| `cv::cvtColor` | 颜色空间转换 |
-| `cv::resize` | 缩放 |
-| `cv::GaussianBlur` | 高斯滤波 |
-| `cv::medianBlur` | 中值滤波 |
-| `cv::threshold` | 固定阈值二值化 |
-| `cv::adaptiveThreshold` | 自适应阈值 |
-| `cv::inRange` | 区间分割生成 Mask |
-| `cv::getStructuringElement` | 生成形态学 kernel |
-| `cv::erode` | 腐蚀 |
-| `cv::dilate` | 膨胀 |
-| `cv::morphologyEx` | 开/闭等形态学操作 |
-| `cv::Canny` | Canny 边缘检测 |
-
-## 26. 轮廓与几何
-
-| API / 类型 | 作用 |
-| --- | --- |
-| `cv::findContours` | 提取轮廓 |
-| `cv::drawContours` | 绘制轮廓 |
-| `cv::contourArea` | 轮廓面积 |
-| `cv::arcLength` | 周长/曲线长度 |
-| `cv::moments` | 图像矩 / 轮廓矩 |
-| `cv::approxPolyDP` | 多边形近似 |
-| `cv::convexHull` | 凸包 |
-| `cv::boundingRect` | 水平外接矩形 |
-| `cv::minAreaRect` | 最小面积旋转矩形 |
-| `cv::RotatedRect::points` | 获取旋转矩形四顶点 |
-
-## 27. 绘图
-
-| API | 作用 |
-| --- | --- |
-| `cv::line` | 线段 |
-| `cv::rectangle` | 矩形 |
-| `cv::circle` | 圆 |
-| `cv::ellipse` | 椭圆 |
-| `cv::polylines` | 多段线 / 多边形 |
-| `cv::putText` | 绘制文字 |
-
-不清楚某个函数的某个参数是什么意思时，先查 OpenCV 官方文档，不要只照抄博客代码。尤其是颜色范围、角度、图像类型，以及函数对输入格式的要求，都要结合当前 OpenCV 版本确认。
+查函数参数时以官方文档为准，尤其注意颜色顺序、图像类型和下标顺序这几个容易错的地方。
 
 ---
 
-> **到这里，本文的 OpenCV 主体内容已经结束。** 当前输出仍然是二维图像坐标；三维几何、机器人软件通信以及射击控制属于另外的问题域，本文不继续展开。
+# 练习与验收
 
----
-
-# 第七部分：练习与验收
-
-
-## 28. 建议练习
+## 练习
 
 ### Task 1：基础图像操作
 
-读取一张图片，输出宽、高、通道数；取中央 ROI；在图上绘制矩形、中心点和文字；保存结果。
+读一张图，输出宽、高、通道数、`type()`；取中央像素并按 BGR 打印；取中央一半 ROI；在 clone 出来的图上画矩形、中心点和文字；保存。
 
-必须使用：
+### Task 2：坐标与通道
 
-```text
-Mat / Point / Rect / Scalar
-imread / imwrite
-rectangle / circle / putText
-imshow / waitKey
-```
+取同一张图的 `(100, 200)` 和 `(200, 100)` 两个像素，都打印出来，解释为什么结果不同。再把一张 BGR 图的某个像素改成 `(255, 0, 0)`，确认它是蓝色而不是红色。
 
-### Task 2：颜色与二值化
+### Task 3：手算 IoU
 
-读取一张彩色图，分别生成 Gray 和 HSV；使用 `threshold` 和 `inRange` 产生两种不同的 Binary Mask，并说明它们各自依据了什么信息。
+给两个 `cv::Rect`，手写函数算 IoU。用几组数据验证：完全重合（1.0）、完全分离（0.0）、一个包含另一个、部分重叠。
 
-### Task 3：形态学
+### Task 4：读代码
 
-人为制造或寻找一张有噪点和孔洞的二值图，对比 Erode、Dilate、Open、Close，说明每一种操作改变了什么。
+打开 `autoaim_sentry_2025`，回答：
 
-### Task 4：轮廓与几何
+1. 相机图像在哪个节点、被缩放到多大？（`camera_node.cpp`）
+2. `image_msg.step` 为什么等于 `width * 3`？
+3. 检测器的模型输出每行有多少个数，分别是什么？（`openvino_infer_engine.cpp` + `detector_node.cpp` 里引擎的构造参数）
+4. 关键点越界检查用的是图像宽高还是模型输入宽高？为什么？
+5. 检测器和录像节点分别用 `toCvCopy` 还是 `toCvShare`？各自为什么合适？
+6. `draw_labeled_image()` 为什么先 `clone()`？
+7. PnP 的 `obj_pts` 有几个点、单位是什么、顺序和 `img_pts` 怎么对应？（`pnp_solver.cpp` / `pnp_solver.hpp`）
+8. `VideoWriter` 的帧尺寸为什么必须和相机输出一致？
 
-对二值图运行 `findContours`，为每条轮廓计算：
+### Task 5：改一个参数
 
-```text
-Area
-Perimeter
-BoundingRect
-MinAreaRect
-```
+把 `autoaim_detector/config/params.yaml` 里的 `confidence_threshold` 从 0.4 调到 0.9，用录制好的视频或回放跑，观察 `labeled_image` 上框的变化，解释现象。
 
-并将结果可视化。
+## 验收
 
-### Task 5：Trackbar 参数观察
+应该能回答或演示：
 
-编写 HSV Trackbar 工具，不要求得到“最终比赛参数”，但要能够解释 H、S、V 每个参数改变后 Mask 为什么发生对应变化。
+**图像基础**
 
-### Task 6：灯条 Detector
+- `Mat` 的 `rows/cols`、`width/height`、`(y,x)`/`(x,y)` 分别指什么，为什么容易混？
+- 彩色图的通道顺序是什么？`at<cv::Vec3b>(y, x)` 的三个分量各是什么？
+- 浅拷贝和 `clone()` 的区别是什么？什么时候必须 `clone()`？
+- `Rect` 的四个参数是什么？和 `Mat(rows, cols)` 有什么不同？
 
-完成：
+**项目里的 OpenCV**
 
-```text
-Image
-  → Preprocess
-  → Contours
-  → RotatedRect
-  → Light Feature Filter
-  → vector<Light>
-```
-
-要求能够打印每个候选的面积、长宽比和倾角，并说明被过滤的原因。
-
-### Task 7：装甲板匹配
-
-对 `vector<Light>` 两两匹配，构造 `Armor`。至少使用：
-
-- 灯条高度比例；
-- 归一化中心高度差；
-- 归一化水平距离；
-- 灯条角度差。
-
-最终输出装甲板中心和四角点。
-
-### Task 8：视频 Detector
-
-把单图 Detector 放进视频循环，显示实时结果并统计单帧处理延迟。保存典型漏检和误检帧作为 Failure Case。
+- 一帧图像从相机到检测器经历了哪些转换？分别在哪个文件？
+- `cv::Rect` 和 `cv::Point2f` 在检测流程里各存什么？
+- NMS 在解决什么问题？IoU 怎么算？阈值调高调低各有什么后果？
+- PnP 的两组输入点分别是什么、从哪来、为什么顺序必须对应？
+- `enable_labeled_image` 打开后能看到什么？怎么用它定位问题？
+- 录像是怎么把标注画到视频里的？
 
 ---
 
-## 29. 最终验收
-
-完成本文后，你至少应该能够回答并实际演示：
-
-**OpenCV 基础：**
-
-- `cv::Mat`、`Point2f`、`Rect`、`Scalar`、`RotatedRect` 分别是什么？
-- `Mat` 的浅拷贝和 `clone()` 有什么区别？
-- `rows/cols`、`width/height`、`(y,x)/(x,y)` 为什么容易混淆？
-- BGR、Gray、HSV 分别适合处理什么信息？
-- `VideoCapture`、`imshow`、`waitKey` 的基本工作方式是什么？
-
-**图像处理：**
-
-- `cvtColor`、`split`、`inRange`、`threshold` 的输入输出分别是什么？
-- Gaussian Blur 和 Morphology 为什么不是“越多越好”？
-- `erode`、`dilate`、`open`、`close` 各自改变什么？
-- 什么情况下会考虑 `Canny`？
-
-**轮廓与几何：**
-
-- `findContours` 的输出数据结构是什么？
-- `contourArea`、`arcLength`、`boundingRect`、`minAreaRect` 各自提供什么信息？
-- 为什么要把 `RotatedRect` 转换成自己定义的 `Light`？
-
-**算法思维：**
-
-- 什么是特征？什么是判据？
-- 为什么归一化距离通常比固定像素距离更适合处理远近变化？
-- 为什么“参数调出来了”不是充分解释？
-- 什么是 False Positive、False Negative 和 Failure Case？
-
-**工程能力：**
-
-- 当最终 Armor 消失时，应该如何逐级检查 Pipeline？
-- 如何用 OpenCV 绘图和 Trackbar 做调试？
-- 如何组织 `preprocess / detectLights / matchArmors` 的职责？
-- 如何测量单帧处理延迟？
-
----
-
-## 30. 最后需要记住的主线
-
-如果读完全文只保留一条主线，请记住这条：
-
-```text
-图像是数据
-   ↓
-通过颜色、亮度、边缘等信息增强目标
-   ↓
-通过阈值或其他方法得到候选区域
-   ↓
-把像素区域转换成轮廓和几何对象
-   ↓
-从几何对象中计算可解释的特征
-   ↓
-利用目标先验建立判据
-   ↓
-把通用几何对象提升成 Light、Armor 等业务对象
-   ↓
-输出稳定的二维目标信息
-```
-
-OpenCV 的价值，在于提供一批稳定、高效、经过大量验证的基础视觉工具。RoboMaster 视觉组成员真正要练的能力，是搞清楚为什么选这个工具、它的输入输出是什么、这个特征为什么有效、这个参数从哪里来，以及算法会在哪些条件下失败。
-
-> **本文的终点：你能够独立阅读和编写基础 OpenCV C++ 程序，并完成一个可解释、可调试的简化传统视觉 Detector，稳定输出 Armor 的二维几何信息。**
-
----
-
----
-
-## 参考与继续阅读
-
-本文开头已经列出了最重要的 OpenCV 官方入口。后续学习时，建议按当前问题定向查阅官方教程，而不是从 API Reference 第一页开始顺序阅读。尤其是 `cv::Mat`、`imgproc`、颜色转换、阈值、形态学与轮廓相关章节，都会在实际视觉开发中反复使用。
+> 本文只覆盖读懂 `autoaim_sentry_2025` 所需的 OpenCV。`threshold`、形态学、`findContours` 等传统视觉工具虽然常见，但这份代码的识别不依赖它们，学到需要时再查官方 `imgproc` 教程即可。
