@@ -212,7 +212,7 @@ project/
 ```
 mkdir build
 cd build
-cmake ...
+cmake ..
 make
 ```
 我们进入 `build` 文件夹，再通过 `cmake ..` 命令，对上一层文件夹进行编译。这样，`cmake` 产生的中间文件就会生成在 `build` 文件夹中，与源代码分开。相应地，可执行文件也会位于 `build` 文件夹中，不过影响不大。
