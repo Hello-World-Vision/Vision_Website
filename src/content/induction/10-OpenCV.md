@@ -7,11 +7,11 @@ tags: ["OpenCV", "图像处理", "RoboMaster"]
 status: done
 draft: false
 ---
-本openCV教程是基于2025哨兵开源代码展开，前面主要讲解openCV基础知识，后半部分结合开源代码解释openCV在rm比赛中常用的一些功能。
+本教程基于 2025 哨兵开源代码展开，前半部分讲解 OpenCV 基础知识，后半部分结合开源代码解释 OpenCV 在 RoboMaster 比赛中常用的功能。
 
-openCV是自瞄部分常用的工具，能够很好的解决传统视觉处理的问题，当然真正的自瞄代码中涉及的图像处理方式并不仅限于下面所讲的。
+OpenCV 是自瞄部分常用的工具，能很好地解决传统视觉处理的问题。真正的自瞄代码涉及的图像处理方式并不限于下面所讲的内容。
 
-下表是 OpenCV 在 `autoaim_sentry_2025` 里涉及的openCV内容：
+下表是 `autoaim_sentry_2025` 里涉及的 OpenCV 内容：
 
 | 文件                                               | 位置     | OpenCV 做的事                                                                            |
 | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
@@ -25,7 +25,7 @@ openCV是自瞄部分常用的工具，能够很好的解决传统视觉处理�
 
 ## 官方资料
 
-OpenCV 的 API 很多，不要死记硬背，可以查官方文档 or 问ai：
+OpenCV 的 API 很多，不必死记硬背，可以查官方文档或问 AI：
 
 - **Tutorials 总目录**：https://docs.opencv.org/4.x/d9/df8/tutorial_root.html
 - **`cv::Mat` 入门**：https://docs.opencv.org/4.x/d6/d6d/tutorial_mat_the_basic_image_container.html
@@ -50,7 +50,7 @@ pkg-config --modversion opencv4
 pkg-config --cflags --libs opencv4
 ```
 
-大家已有一定基础，安装问题就不作赘述，碰到问题先上网查或ai，解决不了再寻求老队员帮助
+大家已有一定基础，安装问题不再赘述。碰到问题先上网查或问 AI，解决不了再寻求老队员帮助。
 
 ---
 
@@ -58,7 +58,7 @@ pkg-config --cflags --libs opencv4
 
 ## 1. 图像->矩阵
 
-如下图，一张 8 bit 灰度图是二维数组，每个位置一个 `0~255` 的亮度值。一张 8 bit 彩色图每个位置存 3 个数。OpenCV 用 `cv::Mat` 承载它们，Mat即Matrix，意为矩阵。
+如下图，一张 8 bit 灰度图是二维数组，每个位置一个 `0~255` 的亮度值。一张 8 bit 彩色图每个位置存 3 个数。OpenCV 用 `cv::Mat` 承载它们，Mat 即 Matrix，也就是矩阵。
 
 ![人眼看到的是图像，计算机处理的是像素数值矩阵](images/opencv.png)
 
@@ -118,7 +118,7 @@ uchar r = pixel[2];
 注意：
 
 1. `at<T>()` 的下标是 `(row, col)`，也就是 `(y, x)`，不是 `(x, y)`。
-2. 通道顺序是 **B、G、R**，不是 RGB。`pixel[0]` 是Blue通道。
+2. 通道顺序是 **B、G、R**，不是 RGB。`pixel[0]` 是 Blue 通道。
 
 知道了像素下标规则，就能看懂项目里所有逐像素的代码。
 
@@ -132,7 +132,7 @@ cv::Mat b = image.clone();  // 独立复制，各改各的
 image.copyTo(b);            // 也是显式复制
 ```
 
-这个特性省内存，但不注意会制造隐蔽 bug。`clone()`常用于不想污染原图的情况下修改 Mat。
+这个特性省内存，但不注意会制造隐蔽 bug。`clone()` 常用于需要修改 Mat 又不想污染原图的场景。
 
 ### 1.4 常见几何对象
 
@@ -280,8 +280,8 @@ cv::resize(capture_frame, resized_img, cv::Size(640, 384), 0, 0, cv::INTER_LINEA
 `camera_node.cpp:134-147`
 
 `cv::Mat(Size(width, height), CV_8UC3)` 只分配内存、不填数据，`std::copy` 把 SDK 的裸 buffer 拷进去。拿到 `Mat` 后立刻 `resize` 到 640×384。
-这里两处注释写的原图尺寸不一致（`1440*864` 和 `1280*768`，赤道大变了bushi），实际尺寸以 `nWidth`/`nHeight` 为准。
-固定缩到 640×384 是为了适配神经网络模型输入，神经网络模型的允许输入图像尺寸是固定的，不管你相机取流了多大尺寸的图片，都要resize，尺寸处理放在相机节点，检测节点就不必再做缩放。。
+这里两处注释写的原图尺寸不一致（`1440*864` 和 `1280*768`），实际尺寸以 `nWidth`/`nHeight` 为准。
+固定缩到 640×384 是为了适配神经网络模型输入：模型允许的输入尺寸是固定的，相机取流多大都要 resize。尺寸处理放在相机节点，检测节点就不必再做缩放。
 
 `openvino_infer_engine.cpp:46` 用于检查尺寸，不匹配就抛异常：
 
@@ -309,7 +309,7 @@ std::copy(
 
 ## 5. ROS 图像 ↔ cv::Mat：cv_bridge
 
-检测节点订阅的是 `sensor_msgs/msg/Image`，是ros的图像话题类型，前面讲的`Mat`是openCV的图像类型，二者不一样，所以中间要用 `cv_bridge` 转换：
+检测节点订阅的是 `sensor_msgs/msg/Image`，是 ROS 的图像话题类型；前面讲的 `Mat` 是 OpenCV 的图像类型，二者不一样，所以中间要用 `cv_bridge` 转换：
 
 ```cpp
 const auto cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
@@ -323,7 +323,7 @@ const cv::Mat img = cv_ptr->image;
 `cv_bridge` 的两个常用函数：
 
 - `toCvCopy(msg, encoding)`：拷一份，拿到独立的 `Mat`。检测节点要拿它去推理、画图（例如画出识别框供调试时人眼观察），所以要用拷贝。
-- `toCvShare(msg, encoding)`：不拷贝，共享底层数据，更快，但是消息生命周期结束就失效。
+- `toCvShare(msg, encoding)`：不拷贝，共享底层数据，更快，但消息生命周期结束就失效。
 
 录像节点里的用法：
 
@@ -408,7 +408,7 @@ armor_infer_engine_ = std::make_unique<OpenVINOInferEngine>(
 
 `detector_node.cpp:74-80`
 
-置信度低于 `conf_threshold_` 的框在这一步会被丢弃，即用"置信度阈值"确定框是否可以给后续使用，这也是自瞄过程中“调参”的一部分。
+置信度低于 `conf_threshold_` 的框在这一步会被丢弃，即用置信度阈值筛选哪些框可以给后续使用，这也是自瞄过程中“调参”的一部分。
 
 ## 7. NMS：cv::dnn::NMSBoxes
 
@@ -537,7 +537,7 @@ labeled_image_pub_->publish(*labeled_image);
 
 ## 9. PnP：solvePnPGeneric
 
-pnp的原理在这一篇就不赘述了，主要讲openCV中的用法，想了解pnp的原理的可以去看后面相机的的两篇文章，简单理解就是pnp通过图像二维位置解算出坐标系下的三维位置。
+PnP 的原理这一篇不再赘述，主要讲 OpenCV 中的用法。想了解原理可以看后面关于相机的两篇文章；简单来说，PnP 通过图像上的二维位置解算出坐标系下的三维位置。
 
 检测只给二维像素。要拿去控制云台，得解出三维位姿，用的是 `cv::solvePnPGeneric`：
 
