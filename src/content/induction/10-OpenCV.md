@@ -7,11 +7,11 @@ tags: ["OpenCV", "图像处理", "RoboMaster"]
 status: done
 draft: false
 ---
-这篇分两部分。第一部分讲清楚图像在 OpenCV 里是什么、怎么读写像素，这是后面所有代码的地基；第二部分直接进项目代码，看 OpenCV 在自瞄里具体干了哪些活。
+本openCV教程是基于2025哨兵开源代码展开，前面主要讲解openCV基础知识，后半部分结合开源代码解释openCV在rm比赛中常用的一些功能。
 
-先把一件事说清楚，免得对不上号：本项目的装甲板、能量机关是**关键点神经网络**识别的，不是传统视觉。OpenCV 在这里不负责"认出装甲板"，它负责取图、把图喂给网络前的尺寸处理、解析网络输出的框和关键点、NMS 去重、把结果画到图上、PnP 解算、录像。
+openCV是自瞄部分常用的工具，能够很好的解决传统视觉处理的问题，当然真正的自瞄代码中涉及的图像处理方式并不仅限于下面所讲的。
 
-下表是 OpenCV 在 `autoaim_sentry_2025` 里的全部落点，后文逐个展开：
+下表是 OpenCV 在 `autoaim_sentry_2025` 里涉及的openCV内容：
 
 | 文件                                               | 位置     | OpenCV 做的事                                                                            |
 | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
@@ -22,7 +22,6 @@ draft: false
 | `autoaim_locator/src/pnp_solver.cpp`             | 91–179  | `solvePnPGeneric` 解位姿，`cv2eigen` 转成 Eigen，供 TF 使用                          |
 | `autoaim_recorder/src/recorder_node.cpp`         | 142–199 | `cv::VideoWriter` 录视频，`clone` 后叠加状态信息                                     |
 
-所以本文不教 `threshold`、形态学、`findContours` 那一套传统视觉检测。本项目识别不走那条路，学了也没有对应代码可读。这些工具本身有价值，但不属于这份教程。这里只保留读懂上述代码所必需的图像基础。
 
 ## 官方资料
 
@@ -51,11 +50,13 @@ pkg-config --modversion opencv4
 pkg-config --cflags --libs opencv4
 ```
 
+大家已有一定基础，安装问题就不作赘述，碰到问题先上网查或ai，解决不了再寻求老队员帮助
+
 ---
 
 # 第一部分：图像基础
 
-## 1. 图像是矩阵
+## 1. 图像->矩阵
 
 如下图，一张 8 bit 灰度图是二维数组，每个位置一个 `0~255` 的亮度值。一张 8 bit 彩色图每个位置存 3 个数。OpenCV 用 `cv::Mat` 承载它们，Mat即Matrix，意为矩阵。
 
@@ -407,7 +408,7 @@ armor_infer_engine_ = std::make_unique<OpenVINOInferEngine>(
 
 `detector_node.cpp:74-80`
 
-置信度低于 `conf_threshold_` 的框在这一步会被丢弃，即用"置信度阈值"确定框是否可以给后续使用。
+置信度低于 `conf_threshold_` 的框在这一步会被丢弃，即用"置信度阈值"确定框是否可以给后续使用，这也是自瞄过程中“调参”的一部分。
 
 ## 7. NMS：cv::dnn::NMSBoxes
 
@@ -431,10 +432,10 @@ IoU 超过 `nms_threshold_`（项目里默认 0.4）的框被抑制。用 `Rect`
 ```cpp
 float iou(const cv::Rect& a, const cv::Rect& b)
 {
-    const int ix1 = std::max(a.x, b.x);
-    const int iy1 = std::max(a.y, b.y);
+    const int ix1 = std::max(a.x, b.x); 
+    const int iy1 = std::max(a.y, b.y); //左上角点取交
     const int ix2 = std::min(a.x + a.width, b.x + b.width);
-    const int iy2 = std::min(a.y + a.height, b.y + b.height);
+    const int iy2 = std::min(a.y + a.height, b.y + b.height); //右下角点取交
 
     const int iw = std::max(0, ix2 - ix1);
     const int ih = std::max(0, iy2 - iy1);
@@ -512,7 +513,7 @@ cv::Mat DetectorNode::draw_labeled_image(
 
 `detector_node.cpp:163-201`（此处按装甲板分支精简，能量机关分支结构相同）
 
-几个点：
+注意：
 
 - `clone()`：`input_image` 是相机来的原图，不能直接改，所以先复制。
 - `colors[det.color]`：颜色索引 0/1/2 对应蓝、红、灰，和模型输出的颜色类别一致。
@@ -536,6 +537,8 @@ labeled_image_pub_->publish(*labeled_image);
 
 ## 9. PnP：solvePnPGeneric
 
+pnp的原理在这一篇就不赘述了，主要讲openCV中的用法，想了解pnp的原理的可以去看后面相机的的两篇文章，简单理解就是pnp通过图像二维位置解算出坐标系下的三维位置。
+
 检测只给二维像素。要拿去控制云台，得解出三维位姿，用的是 `cv::solvePnPGeneric`：
 
 ```cpp
@@ -544,7 +547,7 @@ const std::array<cv::Point2f, 4> img_pts {
     cv::Point2f {detection.bl.x, detection.bl.y},
     cv::Point2f {detection.br.x, detection.br.y},
     cv::Point2f {detection.tr.x, detection.tr.y}
-};
+}; //top left bottom right 以此类推
 
 std::array<cv::Mat, 2> rvec, tvec;
 std::array<float, 2> reprojerr;
@@ -566,8 +569,6 @@ cv::solvePnPGeneric(
 
 `pnp_solver.cpp:131-151`
 
-两个输入最关键：
-
 - `obj_pts` 是装甲板在自身坐标系里的四个角点，单位米，定义在 `pnp_solver.hpp:80-91`：
 
   ```cpp
@@ -579,9 +580,9 @@ cv::solvePnPGeneric(
       {0, -SMALL_WIDTH / 2,  HEIGHT / 2}
   };
   ```
-- `img_pts` 就是第 6 节网络输出的那四个关键点。
+- `img_pts` 就是第 6 节神经网络网络输出的那四个关键点。
 
-**二维点和三维点的顺序必须严格对应**：`obj_pts[0]` 对应 `img_pts[0]`，依此类推。如果检测器按"左上、左下、右下、右上"输出，而物体系却按别的顺序排，程序照样跑，位姿却是错的。顺序约定必须全队统一。
+**二维点和三维点的顺序必须严格对应**：`obj_pts[0]` 对应 `img_pts[0]`，依此类推。如果检测器按"左上、左下、右下、右上"输出，而物体系却按别的顺序排，代码不会报错，但是会导致位姿解算出错。因此顺序约定必须统一。
 
 `SOLVEPNP_IPPE` 针对平面目标，会给出两组解，所以 `rvec`/`tvec`/`reprojerr` 都是长度为 2 的数组：两组位姿加各自的重投影误差，调用方据此挑一组。
 
@@ -595,8 +596,6 @@ translations[i][j] = cv_to_tf * tvec;
 ```
 
 `pnp_solver.cpp:173-176`
-
-PnP 的原理、坐标系转换和标定细节在 [12-相机标定与位姿解算](/Vision_Website/induction-training/12-相机标定与位姿解算) 里讲，这里只需要知道：**OpenCV 负责从二维点解出位姿，输入是 `Point2f`/`Point3f` 两组点加内参。**
 
 ## 10. 录像：cv::VideoWriter
 
@@ -617,9 +616,9 @@ if (!video_writer_raw_.isOpened()) {
 
 `recorder_node.cpp:58-67`
 
-四个参数：输出路径、编码 `fourcc('a','v','c','1')`（H.264）、帧率、帧尺寸（`Size(width, height)`）。**尺寸必须和写进去的帧一致**，这里 640×384 和相机输出一致。`isOpened()` 要检查，编码器不支持时会失败。
+四个参数：输出路径、编码 `fourcc('a','v','c','1')`（H.264）、帧率、帧尺寸（`Size(width, height)`）。**尺寸必须和写进去的帧一致**，例如这里的 640×384 和相机输出（也就是我们要写入到录像中的图像）一致。
 
-带标注的那一路，先把状态信息画上去再写：
+带标注的那一路图像，要先把状态信息画上去再写：
 
 ```cpp
 const auto cv_ptr = cv_bridge::toCvShare(msg, "bgr8");
@@ -635,7 +634,7 @@ video_writer_verbose_mtx_.unlock();
 
 `recorder_node.cpp:158-198`
 
-`<<` 就是"写一帧"。`draw_info_on_img()` 内部同样是一堆 `putText`（`recorder_node.cpp:201` 起），和第 8 节画检测框是同一类操作，只是画的是状态文字。
+`<<` 就是"写一帧"。`draw_info_on_img()` 内部同样是一堆 `putText`（`recorder_node.cpp:201` 起），和第 8 节画检测框是同一类操作，只是画的是状态文字，原理相同，不过多赘述。
 
 录像节点同时被多个订阅回调调用，写视频前上锁，这是并发下 `VideoWriter` 的安全做法。
 
@@ -654,13 +653,11 @@ video_writer_verbose_mtx_.unlock();
 enable_labeled_image: true
 ```
 
-打开后 `autoaim/detector/labeled_image` 会发布画好框和关键点的图，用 Foxglove 订阅就能看。判断优先级：
+打开后 `autoaim/detector/labeled_image` 会发布画好框和关键点的图，用 Foxglove 订阅就能看。建议的判断优先级：
 
 - 调试图上**一个框都没有**：问题在模型、输入尺寸或置信度阈值，跟画图无关；
-- 框的位置对但**关键点错乱**：检查关键点顺序，以及第 9 节说的二维/三维点对应；
+- 框的位置对但**关键点错乱**：pnp出现问题，检查关键点顺序，以及第 9 节说的二维/三维点对应；
 - 框和关键点都对但**录像里偏**：问题在时序或坐标转换，不在检测。
-
-先定位到哪一级，再改对应的地方。
 
 ## 12. 性能
 
@@ -708,60 +705,3 @@ std::cout << "latency = " << ms << " ms\n";
 查函数参数时以官方文档为准，尤其注意颜色顺序、图像类型和下标顺序这几个容易错的地方。
 
 ---
-
-# 练习与验收
-
-## 练习
-
-### Task 1：基础图像操作
-
-读一张图，输出宽、高、通道数、`type()`；取中央像素并按 BGR 打印；取中央一半 ROI；在 clone 出来的图上画矩形、中心点和文字；保存。
-
-### Task 2：坐标与通道
-
-取同一张图的 `(100, 200)` 和 `(200, 100)` 两个像素，都打印出来，解释为什么结果不同。再把一张 BGR 图的某个像素改成 `(255, 0, 0)`，确认它是蓝色而不是红色。
-
-### Task 3：手算 IoU
-
-给两个 `cv::Rect`，手写函数算 IoU。用几组数据验证：完全重合（1.0）、完全分离（0.0）、一个包含另一个、部分重叠。
-
-### Task 4：读代码
-
-打开 `autoaim_sentry_2025`，回答：
-
-1. 相机图像在哪个节点、被缩放到多大？（`camera_node.cpp`）
-2. `image_msg.step` 为什么等于 `width * 3`？
-3. 检测器的模型输出每行有多少个数，分别是什么？（`openvino_infer_engine.cpp` + `detector_node.cpp` 里引擎的构造参数）
-4. 关键点越界检查用的是图像宽高还是模型输入宽高？为什么？
-5. 检测器和录像节点分别用 `toCvCopy` 还是 `toCvShare`？各自为什么合适？
-6. `draw_labeled_image()` 为什么先 `clone()`？
-7. PnP 的 `obj_pts` 有几个点、单位是什么、顺序和 `img_pts` 怎么对应？（`pnp_solver.cpp` / `pnp_solver.hpp`）
-8. `VideoWriter` 的帧尺寸为什么必须和相机输出一致？
-
-### Task 5：改一个参数
-
-把 `autoaim_detector/config/params.yaml` 里的 `confidence_threshold` 从 0.4 调到 0.9，用录制好的视频或回放跑，观察 `labeled_image` 上框的变化，解释现象。
-
-## 验收
-
-应该能回答或演示：
-
-**图像基础**
-
-- `Mat` 的 `rows/cols`、`width/height`、`(y,x)`/`(x,y)` 分别指什么，为什么容易混？
-- 彩色图的通道顺序是什么？`at<cv::Vec3b>(y, x)` 的三个分量各是什么？
-- 浅拷贝和 `clone()` 的区别是什么？什么时候必须 `clone()`？
-- `Rect` 的四个参数是什么？和 `Mat(rows, cols)` 有什么不同？
-
-**项目里的 OpenCV**
-
-- 一帧图像从相机到检测器经历了哪些转换？分别在哪个文件？
-- `cv::Rect` 和 `cv::Point2f` 在检测流程里各存什么？
-- NMS 在解决什么问题？IoU 怎么算？阈值调高调低各有什么后果？
-- PnP 的两组输入点分别是什么、从哪来、为什么顺序必须对应？
-- `enable_labeled_image` 打开后能看到什么？怎么用它定位问题？
-- 录像是怎么把标注画到视频里的？
-
----
-
-> 本文只覆盖读懂 `autoaim_sentry_2025` 所需的 OpenCV。`threshold`、形态学、`findContours` 等传统视觉工具虽然常见，但这份代码的识别不依赖它们，学到需要时再查官方 `imgproc` 教程即可。
